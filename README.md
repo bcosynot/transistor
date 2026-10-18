@@ -1,7 +1,7 @@
 # transistor
 
 Publishes the next departures for a configurable set of transit lines to MQTT,
-for a Home Assistant dashboard. Built for a kitchen kiosk: two numbers per
+for a Home Assistant dashboard. Built for a wall-mounted kiosk: two numbers per
 line, minutes away (primary) and clock time (secondary).
 
 ```
@@ -147,10 +147,10 @@ every 30 s.
 
 ## Home Assistant
 
-1. Copy `homeassistant/kitchen-transit-card.js` to `/config/www/`.
+1. Copy `homeassistant/dashboard-transit-card.js` to `/config/www/`.
 2. Register it as a module resource and add the MQTT sensor — see
    `homeassistant/mqtt_sensors.yaml` and `homeassistant/dashboard-snippet.yaml`.
-3. Add `custom:kitchen-transit-card` to your dashboard in its own
+3. Add `custom:dashboard-transit-card` to your dashboard in its own
    `column_span: 4` section.
 
 A markdown card cannot do this: HA strips every `style` attribute out of

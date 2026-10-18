@@ -1,13 +1,13 @@
 /**
- * kitchen-transit-card
+ * dashboard-transit-card
  *
- * Renders the transistor MQTT board (sensor.kitchen_transit) as a dense row
+ * Renders the transistor MQTT board (sensor.dashboard_transit) as a dense row
  * per line: route badge, stop/direction, then the next two departures with
  * minutes-away as the primary value and the clock time as the secondary.
  *
  * Config:
- *   type: custom:kitchen-transit-card
- *   entity: sensor.kitchen_transit
+ *   type: custom:dashboard-transit-card
+ *   entity: sensor.dashboard_transit
  *   title: Transit            # optional, hides the header when null
  *
  * Written as a plain custom element (no Lit, no build step) because a
@@ -69,10 +69,10 @@ ha-card {
 .state-stale .header .meta { color: var(--warning-color, #ffa726); opacity: 1; }
 `;
 
-class KitchenTransitCard extends HTMLElement {
+class DashboardTransitCard extends HTMLElement {
   setConfig(config) {
     if (!config || !config.entity) {
-      throw new Error("kitchen-transit-card: 'entity' is required");
+      throw new Error("dashboard-transit-card: 'entity' is required");
     }
     this._config = config;
     this._build();
@@ -192,19 +192,19 @@ class KitchenTransitCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { entity: "sensor.kitchen_transit", title: "Transit" };
+    return { entity: "sensor.dashboard_transit", title: "Transit" };
   }
 }
 
-if (!customElements.get("kitchen-transit-card")) {
-  customElements.define("kitchen-transit-card", KitchenTransitCard);
+if (!customElements.get("dashboard-transit-card")) {
+  customElements.define("dashboard-transit-card", DashboardTransitCard);
 }
 
 window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === "kitchen-transit-card")) {
+if (!window.customCards.some((c) => c.type === "dashboard-transit-card")) {
   window.customCards.push({
-    type: "kitchen-transit-card",
-    name: "Kitchen Transit",
+    type: "dashboard-transit-card",
+    name: "Dashboard Transit",
     description: "Next departures for your configured transit lines.",
   });
 }

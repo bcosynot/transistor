@@ -9,9 +9,9 @@
 
 mqtt:
   sensor:
-    - name: "Kitchen Transit"
+    - name: "Dashboard Transit"
       unique_id: transistor_board
-      object_id: kitchen_transit
+      object_id: dashboard_transit
       state_topic: "transistor/state"
       value_template: "{{ value_json.summary }}"
       json_attributes_topic: "transistor/state"
@@ -27,9 +27,9 @@ mqtt:
   # A separate binary sensor makes "the feed went stale" a first-class trigger
   # for automations, instead of something a template has to dig out.
   binary_sensor:
-    - name: "Kitchen Transit Stale"
+    - name: "Dashboard Transit Stale"
       unique_id: transistor_stale
-      object_id: kitchen_transit_stale
+      object_id: dashboard_transit_stale
       state_topic: "transistor/state"
       value_template: "{{ value_json.stale }}"
       availability_topic: "transistor/status"

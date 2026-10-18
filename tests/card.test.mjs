@@ -1,5 +1,5 @@
 /**
- * Render tests for kitchen-transit-card.
+ * Render tests for dashboard-transit-card.
  *
  * The card is a plain custom element (no Lit, no build step), so it can be
  * exercised directly with a minimal DOM stub — no browser required.
@@ -63,8 +63,8 @@ globalThis.customElements = {
 };
 globalThis.window = {};
 
-await import("../homeassistant/kitchen-transit-card.js");
-const Card = defined.get("kitchen-transit-card");
+await import("../homeassistant/dashboard-transit-card.js");
+const Card = defined.get("dashboard-transit-card");
 
 function makeCard(entityId, state) {
   const card = new Card();
@@ -98,7 +98,7 @@ const BOARD = {
 
 test("registers itself as a custom card", () => {
   assert.ok(Card, "custom element was defined");
-  assert.ok(window.customCards.some((c) => c.type === "kitchen-transit-card"));
+  assert.ok(window.customCards.some((c) => c.type === "dashboard-transit-card"));
 });
 
 test("setConfig without an entity throws", () => {
@@ -113,7 +113,7 @@ test("claims the full grid width", () => {
 });
 
 test("renders one row per line", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.equal((html.match(/class="row"/g) || []).length, 4);
   assert.match(html, /Example Av/);
   assert.match(html, /Example Rd\/1 St/);
@@ -122,30 +122,30 @@ test("renders one row per line", () => {
 });
 
 test("shows minutes as the primary value and clock time as secondary", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.match(html, /3<small>min<\/small>/);
   assert.match(html, /8:03am/);
 });
 
 test("a departure under a minute reads as 'now'", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.match(html, /class="min">now</);
 });
 
 test("a line with no service renders an empty cell, not a crash", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   // The B row exists with a dash and no clock time.
   assert.match(html, /class="dep empty"/);
 });
 
 test("bus and subway badges are colour-coded", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.match(html, /background:#fccc0a/); // subway yellow
   assert.match(html, /background:#1c5fa8/); // bus blue
 });
 
 test("only multi-character routes get the pill badge", () => {
-  const html = makeCard("sensor.kitchen_transit", BOARD)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   // A one-character subway route stays a circle…
   assert.match(html, /class="badge" style="background:#fccc0a/);
   // …while a three-character bus route needs the wider pill.
@@ -154,13 +154,13 @@ test("only multi-character routes get the pill badge", () => {
 
 test("a stale board is flagged in the header", () => {
   const stale = { ...BOARD, attributes: { ...BOARD.attributes, stale: true } };
-  const card = makeCard("sensor.kitchen_transit", stale);
+  const card = makeCard("sensor.dashboard_transit", stale);
   assert.equal(card._card.className, "state-stale");
   assert.match(card._header.innerHTML, /stale/);
 });
 
 test("an unavailable entity renders a placeholder", () => {
-  const card = makeCard("sensor.kitchen_transit", { state: "unavailable", attributes: {} });
+  const card = makeCard("sensor.dashboard_transit", { state: "unavailable", attributes: {} });
   assert.match(card._body.innerHTML, /waiting for the transit feed/);
 });
 
@@ -181,7 +181,7 @@ test("markup in feed data is escaped", () => {
       ],
     },
   };
-  const html = makeCard("sensor.kitchen_transit", nasty)._body.innerHTML;
+  const html = makeCard("sensor.dashboard_transit", nasty)._body.innerHTML;
   assert.ok(!html.includes("<img"), "raw tag must not survive");
   assert.ok(!html.includes("<script"), "raw tag must not survive");
   assert.match(html, /&lt;script&gt;/);

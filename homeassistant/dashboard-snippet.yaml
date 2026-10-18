@@ -1,16 +1,16 @@
-# Kitchen kiosk wiring for transistor.
+# Dashboard wiring for transistor.
 #
-# 1. Deploy the card to /config/www/kitchen-transit-card.js
+# 1. Deploy the card to /config/www/dashboard-transit-card.js
 # 2. Register it as a Lovelace resource (websocket API):
 #      {"type":"lovelace/resources/create",
-#       "url":"/local/kitchen-transit-card.js?v=1",
+#       "url":"/local/dashboard-transit-card.js?v=1",
 #       "res_type":"module"}
 #    Bump ?v= on every JS change with lovelace/resources/update, which takes
 #    `resource_id` (not `id`) alongside the new url.
-# 3. Add the card below to the kitchen-kiosk dashboard, in its own view
+# 3. Add the card below to your kiosk dashboard, in its own view
 #    *section* so it can be given the full row width.
 #
-# The card reads sensor.kitchen_transit (see mqtt_sensors.yaml).
+# The card reads sensor.dashboard_transit (see mqtt_sensors.yaml).
 
 # ---- Option A: a dedicated section directly under the existing top grid ----
 # Insert as an element of views[0].sections:
@@ -20,8 +20,8 @@
     # ... existing sections (weather grid, meeting banner, lights grid) ...
     - column_span: 4          # full width, whatever the view's column count
       cards:
-        - type: custom:kitchen-transit-card
-          entity: sensor.kitchen_transit
+        - type: custom:dashboard-transit-card
+          entity: sensor.dashboard_transit
           title: Transit
 
 # ---- Option B: inside the existing top 3-column grid card ----
@@ -34,7 +34,7 @@
 # A conditional card hides the banner whenever the feed is healthy:
 - type: conditional
   conditions:
-    - entity: binary_sensor.kitchen_transit_stale
+    - entity: binary_sensor.dashboard_transit_stale
       state: "on"
   card:
     type: markdown
