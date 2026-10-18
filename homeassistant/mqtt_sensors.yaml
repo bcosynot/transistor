@@ -1,17 +1,24 @@
 # Home Assistant entities for transistor.
 #
-# Paste this under the existing top-level `mqtt:` key in /config/configuration.yaml
-# (or merge the `sensor:` list if you already have one). Then reload with
-# Developer Tools -> YAML -> "MQTT" (the mqtt integration has no reload service
-# for YAML-defined entities, so a core restart is the reliable path).
+# Paste this under the top-level `mqtt:` key in /config/configuration.yaml.
+# If that key already exists, merge the `sensor:`/`binary_sensor:` lists into it
+# rather than adding a second `mqtt:` — duplicate top-level keys are a YAML error.
 #
-# One entity carries the whole board as attributes; the kiosk card renders it.
+# Apply it with the narrow reload, no core restart needed:
+#     POST /api/services/mqtt/reload
+# (`mqtt.reload` exists; it is not obvious from the integration page.)
+#
+# NOTE: YAML-configured MQTT entities have NO `object_id` option. Adding one is
+# rejected with "'object_id' is an invalid option for 'sensor'" and takes the
+# whole platform down. The entity id comes from `name`, so
+# "Dashboard Transit" -> sensor.dashboard_transit.
+#
+# One entity carries the whole board as attributes; the card renders it.
 
 mqtt:
   sensor:
     - name: "Dashboard Transit"
       unique_id: transistor_board
-      object_id: dashboard_transit
       state_topic: "transistor/state"
       value_template: "{{ value_json.summary }}"
       json_attributes_topic: "transistor/state"
@@ -29,9 +36,10 @@ mqtt:
   binary_sensor:
     - name: "Dashboard Transit Stale"
       unique_id: transistor_stale
-      object_id: dashboard_transit_stale
       state_topic: "transistor/state"
-      value_template: "{{ value_json.stale }}"
+      # A binary_sensor compares against payload_on/payload_off (ON/OFF), not
+      # Python truthiness: rendering `False` directly leaves the entity 'unknown'.
+      value_template: "{{ 'ON' if value_json.stale else 'OFF' }}"
       availability_topic: "transistor/status"
       payload_available: "online"
       payload_not_available: "offline"
