@@ -20,6 +20,7 @@ class Feed:
     key: str
     url: str
     poll_interval: float
+    kind: str = "gtfs-rt"
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,8 @@ class Config:
     mqtt_password: str | None = None
     mqtt_prefix: str = "transistor"
     mqtt_tls: bool = False
+    siri_api_key: str | None = None
+    siri_max_visits: int = 10
     publish_interval: float = 15.0
     top_n: int = 2
     timezone: str = "UTC"
@@ -58,25 +61,46 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or malformed."""
 
 
+# "gtfs-rt" — protobuf GTFS-Realtime feed (subway line groups, or the
+#             system-wide bus feed).
+# "siri"    — MTA Bus Time StopMonitoring, queried per stop, needs an API key.
+FEED_KINDS = {"gtfs-rt", "siri"}
+
+
 def _bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _read_password(env: dict) -> str | None:
-    """Prefer the systemd credential so the secret never reaches the Nix store."""
+def _read_secret(env: dict, credential: str, file_var: str, direct_var: str) -> str | None:
+    """Prefer a systemd credential so a secret never reaches the Nix store."""
     cred_dir = env.get("CREDENTIALS_DIRECTORY")
     if cred_dir:
-        path = os.path.join(cred_dir, "mqtt-password")
+        path = os.path.join(cred_dir, credential)
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
                 return fh.read().strip()
-    path = env.get("TRANSISTOR_MQTT_PASSWORD_FILE")
+    path = env.get(file_var)
     if path:
         with open(path, encoding="utf-8") as fh:
             return fh.read().strip()
-    return env.get("TRANSISTOR_MQTT_PASSWORD") or None
+    return env.get(direct_var) or None
+
+
+def _read_password(env: dict) -> str | None:
+    return _read_secret(
+        env, "mqtt-password", "TRANSISTOR_MQTT_PASSWORD_FILE", "TRANSISTOR_MQTT_PASSWORD"
+    )
+
+
+def _read_siri_api_key(env: dict) -> str | None:
+    return _read_secret(
+        env,
+        "siri-api-key",
+        "TRANSISTOR_SIRI_API_KEY_FILE",
+        "TRANSISTOR_SIRI_API_KEY",
+    )
 
 
 def _json_env(env: dict, name: str, default):
@@ -120,9 +144,16 @@ def load_config(env: dict | None = None) -> Config:
             key=key,
             url=spec["url"],
             poll_interval=float(spec.get("pollInterval", 60)),
+            kind=spec.get("kind", "gtfs-rt"),
         )
         for key, spec in raw_feeds.items()
     )
+    for feed in feeds:
+        if feed.kind not in FEED_KINDS:
+            raise ConfigError(
+                f"feed {feed.key!r} has unknown kind {feed.kind!r}; "
+                f"expected one of {', '.join(sorted(FEED_KINDS))}"
+            )
 
     raw_watches = _json_env(env, "TRANSISTOR_WATCHES", None)
     if not raw_watches:
@@ -149,6 +180,18 @@ def load_config(env: dict | None = None) -> Config:
                 f"watch for line {w.line} references unknown feed {w.feed!r}"
             )
 
+    siri_api_key = _read_siri_api_key(env)
+    siri_feeds = [f.key for f in feeds if f.kind == "siri"]
+    if siri_feeds and not siri_api_key:
+        raise ConfigError(
+            "feed(s) "
+            + ", ".join(map(repr, siri_feeds))
+            + " use kind 'siri', which requires an MTA Bus Time API key (free, "
+            "from https://register.developer.obanyc.com/). Supply it with "
+            "TRANSISTOR_SIRI_API_KEY_FILE, TRANSISTOR_SIRI_API_KEY, or a "
+            "systemd credential named siri-api-key."
+        )
+
     return Config(
         mqtt_host=host,
         mqtt_port=int(env.get("TRANSISTOR_MQTT_PORT", "1883")),
@@ -156,6 +199,8 @@ def load_config(env: dict | None = None) -> Config:
         mqtt_password=_read_password(env),
         mqtt_prefix=env.get("TRANSISTOR_MQTT_PREFIX", "transistor"),
         mqtt_tls=_bool(env.get("TRANSISTOR_MQTT_TLS")),
+        siri_api_key=siri_api_key,
+        siri_max_visits=int(env.get("TRANSISTOR_SIRI_MAX_VISITS", "10")),
         publish_interval=float(env.get("TRANSISTOR_PUBLISH_INTERVAL", "15")),
         top_n=int(env.get("TRANSISTOR_TOP_N", "2")),
         timezone=env.get("TRANSISTOR_TIMEZONE", "UTC"),

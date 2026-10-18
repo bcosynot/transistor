@@ -5,7 +5,7 @@ let
   inherit (lib) mkEnableOption mkIf mkOption optionalAttrs types;
 
   feedsJson = builtins.toJSON (lib.mapAttrs (_: f: {
-    inherit (f) url pollInterval;
+    inherit (f) url pollInterval kind;
   }) cfg.feeds);
 
   watchesJson = builtins.toJSON (map (w: {
@@ -68,6 +68,21 @@ in
       };
     };
 
+    siriApiKeyFile = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "/etc/transistor/siri-api-key";
+      description = ''
+        Path to a file containing the MTA Bus Time API key, required by any
+        feed with `kind = "siri"`. Free, from
+        <https://register.developer.obanyc.com/>.
+
+        Passed to the service as a systemd credential, so like
+        `mqtt.passwordFile` it is never written to the Nix store. Also a plain
+        string rather than `types.path`, for the same reason.
+      '';
+    };
+
     timezone = mkOption {
       type = types.str;
       default = "UTC";
@@ -96,7 +111,20 @@ in
         options = {
           url = mkOption {
             type = types.str;
-            description = "GTFS-Realtime protobuf feed URL.";
+            description = "Feed URL.";
+          };
+          kind = mkOption {
+            type = types.enum [ "gtfs-rt" "siri" ];
+            default = "gtfs-rt";
+            description = ''
+              `gtfs-rt` fetches one protobuf document per URL.
+
+              `siri` is MTA Bus Time's StopMonitoring API, which is queried
+              **per stop** rather than per URL: the service issues one request
+              per distinct `stopId` among this feed's watches (~11 KB each,
+              against ~1.8 MB for the system-wide bus GTFS-RT feed). It needs
+              `services.transistor.siriApiKeyFile`.
+            '';
           };
           pollInterval = mkOption {
             type = types.ints.positive;
@@ -111,11 +139,15 @@ in
             url = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-<line-group>";
             pollInterval = 30;
           };
-          bus.url = "https://gtfsrt.prod.obanyc.com/tripUpdates";
+          bus = {
+            kind = "siri";
+            url = "https://bustime-classic.mta.info/api/siri/stop-monitoring.json";
+            pollInterval = 60;
+          };
         }
       '';
       description = ''
-        GTFS-Realtime feeds to poll, keyed by a name referenced from `watches`.
+        Feeds to poll, keyed by a name referenced from `watches`.
 
         No default is provided: the line group you subscribe to is a strong
         hint about where you live, and this module is published. Set it in the
@@ -173,7 +205,7 @@ in
     assertions = [
       {
         assertion = cfg.feeds != { };
-        message = "services.transistor.feeds must list at least one GTFS-Realtime feed";
+        message = "services.transistor.feeds must list at least one feed";
       }
       {
         assertion = cfg.watches != [ ];
@@ -182,6 +214,14 @@ in
       {
         assertion = lib.all (w: lib.elem w.feed (lib.attrNames cfg.feeds)) cfg.watches;
         message = "every services.transistor.watches entry must name a feed defined in services.transistor.feeds";
+      }
+      {
+        assertion = !(lib.any (f: f.kind == "siri") (lib.attrValues cfg.feeds))
+          || cfg.siriApiKeyFile != null;
+        message = ''
+          a feed with kind = "siri" needs services.transistor.siriApiKeyFile.
+          Request a free key at https://register.developer.obanyc.com/
+        '';
       }
     ];
 
@@ -215,8 +255,11 @@ in
         RestartSec = 10;
 
         DynamicUser = true;
-        LoadCredential = lib.optional (cfg.mqtt.passwordFile != null)
-          "mqtt-password:${cfg.mqtt.passwordFile}";
+        LoadCredential =
+          lib.optional (cfg.mqtt.passwordFile != null)
+            "mqtt-password:${cfg.mqtt.passwordFile}"
+          ++ lib.optional (cfg.siriApiKeyFile != null)
+            "siri-api-key:${cfg.siriApiKeyFile}";
 
         # Hardening: the service only ever makes outbound TCP connections.
         NoNewPrivileges = true;

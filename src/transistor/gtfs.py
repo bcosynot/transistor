@@ -1,8 +1,11 @@
 """GTFS-Realtime fetching and departure extraction.
 
-Any GTFS-Realtime protobuf feed works; the MTA's subway line-group feeds and
-the system-wide bus feed both need no API key. The old
-datamine.mta.info / api-endpoints.mta.info hostnames no longer resolve.
+Any GTFS-Realtime protobuf feed works; the MTA's subway line-group feeds need
+no API key. The old datamine.mta.info / api-endpoints.mta.info hostnames no
+longer resolve.
+
+For buses, prefer the SIRI StopMonitoring source (`siri.py`): it answers per
+stop in a few KB, where the system-wide bus GTFS-RT feed is ~1.8 MB per poll.
 """
 
 from __future__ import annotations
@@ -11,33 +14,20 @@ import gzip
 import logging
 import time
 import urllib.request
-from dataclasses import dataclass
-from typing import Iterable, Protocol
+from typing import Iterable
 
 from google.transit import gtfs_realtime_pb2
 
+# Re-exported so callers can keep importing the departure model from here.
+from .departures import (  # noqa: F401
+    GRACE_SECONDS,
+    HORIZON_SECONDS,
+    Departure,
+    Watched,
+    apply_window,
+)
+
 log = logging.getLogger("transistor.gtfs")
-
-# Ignore predictions already this far in the past — a train that "left" 30 s
-# ago is still worth showing while the board catches up.
-GRACE_SECONDS = 45
-# ...and never advertise anything beyond this horizon.
-HORIZON_SECONDS = 60 * 60
-
-
-class Watched(Protocol):
-    """The subset of config.Watch that extraction needs."""
-
-    line: str
-    stop_id: str
-
-
-@dataclass(frozen=True)
-class Departure:
-    line: str
-    stop_id: str
-    epoch: int
-    trip_id: str
 
 
 def fetch(url: str, timeout: float = 20.0, user_agent: str = "transistor/0.1") -> bytes:
@@ -46,8 +36,8 @@ def fetch(url: str, timeout: float = 20.0, user_agent: str = "transistor/0.1") -
         url,
         headers={
             "User-Agent": user_agent,
-            # The bus feed is ~1.8 MB uncompressed; asking for gzip cuts that
-            # roughly 5-8x on the wire.
+            # The system-wide bus feed is ~1.8 MB uncompressed; asking for gzip
+            # cuts that roughly 5-8x on the wire.
             "Accept-Encoding": "gzip",
             "Accept": "application/x-protobuf, application/octet-stream, */*",
         },
@@ -76,9 +66,8 @@ def extract_departures(
 
     A trip carries the route id and each stop_time_update carries a
     directional stop id (subway platforms differ per direction; bus stops
-    differ per direction *and* side of the street). A watch therefore matches
-    only when *both* the route and the stop id line up, which keeps the two
-    directions of a line from being mixed together.
+    differ per direction *and* side of the street). Matching on both keeps the
+    two directions of a line apart — see `departures.apply_window`.
     """
     if now is None:
         now = time.time()
@@ -86,9 +75,7 @@ def extract_departures(
     wanted = {(w.line, w.stop_id) for w in watches}
     routes = {line for line, _ in wanted}
 
-    out: list[Departure] = []
-    seen: set[tuple[str, str, int]] = set()
-
+    raw: list[Departure] = []
     for entity in msg.entity:
         if not entity.HasField("trip_update"):
             continue
@@ -97,19 +84,13 @@ def extract_departures(
         if route not in routes:
             continue
         for stu in trip_update.stop_time_update:
+            # Route *and* directional stop id must both match.
             if (route, stu.stop_id) not in wanted:
                 continue
             when = stu.arrival.time or stu.departure.time
             if not when:
                 continue
-            delta = when - now
-            if delta < -grace or delta > horizon:
-                continue
-            key = (route, stu.stop_id, int(when))
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(
+            raw.append(
                 Departure(
                     line=route,
                     stop_id=stu.stop_id,
@@ -118,5 +99,4 @@ def extract_departures(
                 )
             )
 
-    out.sort(key=lambda d: d.epoch)
-    return out
+    return apply_window(raw, watches, now, grace, horizon)

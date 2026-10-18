@@ -23,22 +23,43 @@ Set your real values in the consuming host configuration, which is private.
 
 ## Data sources
 
-The MTA publishes GTFS-Realtime protobuf feeds that require **no API key**:
+Two feed types, chosen per feed with `kind`:
 
-| Mode | URL | Notes |
-|---|---|---|
-| Subway | `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-<group>` | one feed per line group (`gtfs`, `gtfs-ace`, `gtfs-bdfm`, `gtfs-g`, `gtfs-jz`, `gtfs-l`, `gtfs-nqrw`, `gtfs-si`); ~50-100 KB |
-| Buses | `https://gtfsrt.prod.obanyc.com/tripUpdates` | the whole bus system in one feed, ~1.8 MB, gzipped on the wire |
+| `kind` | Source | Payload | API key |
+|---|---|---|---|
+| `siri` | MTA Bus Time StopMonitoring, `https://bustime-classic.mta.info/api/siri/stop-monitoring.json` | **~11 KB per stop** | yes, free |
+| `gtfs-rt` | GTFS-Realtime protobuf, e.g. subway `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-<group>` | ~50-100 KB per line group | no |
+| `gtfs-rt` | GTFS-Realtime protobuf, system-wide buses `https://gtfsrt.prod.obanyc.com/tripUpdates` | **~1.8 MB** (gzipped on the wire) | no |
 
-The feed listing is at <https://api.mta.info/>. The old `datamine.mta.info`
-and `api-endpoints.mta.info` hostnames no longer resolve — ignore any tutorial
-that still uses them.
+Use `kind = "siri"` for buses. There is no per-route bus GTFS-RT feed, so that
+route means downloading and filtering the entire bus system: at a 60 s poll
+that is roughly **2.5 GB/day**, against a few tens of KB for SIRI. Measured
+against the live API: 11,266 bytes for a 10-visit stop response, versus
+1,860,581 bytes for one bus GTFS-RT poll.
 
-There is no per-route bus feed, so a bus poll pulls the whole system and filters
-locally. At a 60 s interval that is roughly **2.5 GB/day** of transfer; raise
-`feeds.bus.pollInterval` if that matters on your connection. The alternative is
-MTA Bus Time's SIRI `stop-monitoring` endpoint, which returns a few KB per stop
-but requires a free API key from <https://register.developer.obanyc.com/>.
+Subway stays on `gtfs-rt` — the line-group feeds are already small and there is
+no SIRI equivalent.
+
+Subway line groups: `gtfs` (1-7/S), `gtfs-ace`, `gtfs-bdfm`, `gtfs-g`,
+`gtfs-jz`, `gtfs-l`, `gtfs-nqrw`, `gtfs-si`. The feed listing and the
+real-time terms are at <https://api.mta.info/>. The old `datamine.mta.info` and
+`api-endpoints.mta.info` hostnames no longer resolve — ignore any tutorial that
+still uses them.
+
+### The SIRI API key
+
+Free, from <https://register.developer.obanyc.com/>; delivered by email within
+about half an hour.
+
+Supply it, never commit it, and never pass it on a command line. The service
+takes it from, in order:
+
+1. a systemd credential named `siri-api-key` (what the NixOS module wires up),
+2. the file named by `TRANSISTOR_SIRI_API_KEY_FILE`,
+3. the plain `TRANSISTOR_SIRI_API_KEY` variable.
+
+The key is a `?key=` query parameter — that is the only way the API accepts it —
+so it is redacted out of every log line and error message.
 
 ## Finding your stop ids
 
@@ -84,6 +105,9 @@ flake:
       passwordFile = "/etc/transistor/mqtt-password";
     };
 
+    # Required by any feed with kind = "siri".
+    siriApiKeyFile = "/etc/transistor/siri-api-key";
+
     timezone = "America/New_York";
 
     feeds = {
@@ -92,7 +116,8 @@ flake:
         pollInterval = 30;
       };
       bus = {
-        url = "https://gtfsrt.prod.obanyc.com/tripUpdates";
+        kind = "siri";
+        url = "https://bustime-classic.mta.info/api/siri/stop-monitoring.json";
         pollInterval = 60;
       };
     };
@@ -179,14 +204,16 @@ transistor --once | jq .
 ## Layout
 
 ```
-src/transistor/config.py    env-driven configuration
-src/transistor/gtfs.py      feed fetch + departure extraction
-src/transistor/board.py     JSON document + minute rounding
-src/transistor/mqtt.py      MQTT publishing
-src/transistor/service.py   feeder threads + publish loop
-nix/module.nix              NixOS module (services.transistor)
-nix/package.nix             the derivation
-homeassistant/              MQTT sensor, kiosk card, dashboard snippet
+src/transistor/config.py      env-driven configuration
+src/transistor/departures.py  the departure record + time-window filtering
+src/transistor/gtfs.py        GTFS-Realtime fetch + extraction
+src/transistor/siri.py        MTA Bus Time SIRI StopMonitoring client
+src/transistor/board.py       JSON document + minute rounding
+src/transistor/mqtt.py        MQTT publishing
+src/transistor/service.py     feeder threads + publish loop
+nix/module.nix                NixOS module (services.transistor)
+nix/package.nix               the derivation
+homeassistant/                MQTT sensor, kiosk card, dashboard snippet
 ```
 
 ## License

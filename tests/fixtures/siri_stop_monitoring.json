@@ -1,0 +1,134 @@
+{
+  "Siri": {
+    "ServiceDelivery": {
+      "ResponseTimestamp": "2026-01-01T08:00:00.000-05:00",
+      "StopMonitoringDelivery": [
+        {
+          "ResponseTimestamp": "2026-01-01T08:00:00.000-05:00",
+          "ValidUntil": "2026-01-01T08:01:00.000-05:00",
+          "MonitoredStopVisit": [
+            {
+              "RecordedAtTime": "2026-01-01T07:59:40.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTA_C99",
+                "DirectionRef": "1",
+                "FramedVehicleJourneyRef": {
+                  "DataFrameRef": "2026-01-01",
+                  "DatedVehicleJourneyRef": "MTA_47374707-EX-EX_D6-Thursday-04"
+                },
+                "PublishedLineName": ["C99"],
+                "OperatorRef": "MTA",
+                "DestinationName": ["CITY CENTRE via 1 ST"],
+                "Monitored": true,
+                "Bearing": 231.2,
+                "ProgressRate": "normalProgress",
+                "VehicleRef": "MTA_9192",
+                "MonitoredCall": {
+                  "AimedArrivalTime": "2026-01-01T08:04:04.421-05:00",
+                  "ExpectedArrivalTime": "2026-01-01T08:05:17.456-05:00",
+                  "ArrivalProximityText": "< 1 stop away",
+                  "ExpectedDepartureTime": "2026-01-01T08:05:17.456-05:00",
+                  "DistanceFromStop": 201,
+                  "NumberOfStopsAway": 0,
+                  "StopPointRef": "MTA_990001",
+                  "VisitNumber": 1,
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            },
+            {
+              "RecordedAtTime": "2026-01-01T07:59:42.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTABC_D44",
+                "DirectionRef": "1",
+                "FramedVehicleJourneyRef": {
+                  "DataFrameRef": "2026-01-01",
+                  "DatedVehicleJourneyRef": "MTABC_47375047-FX-FX_D6-Thursday-04"
+                },
+                "PublishedLineName": ["D44"],
+                "OperatorRef": "MTABC",
+                "DestinationName": ["LIMITED CITY CENTRE"],
+                "Monitored": true,
+                "VehicleRef": "MTABC_7781",
+                "MonitoredCall": {
+                  "ExpectedArrivalTime": "2026-01-01T08:09:23.262-05:00",
+                  "ExpectedDepartureTime": "2026-01-01T08:09:23.262-05:00",
+                  "StopPointRef": "MTA_990001",
+                  "VisitNumber": 1,
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            },
+            {
+              "RecordedAtTime": "2026-01-01T07:59:45.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTA_C99",
+                "PublishedLineName": ["C99"],
+                "DestinationName": ["CITY CENTRE via 1 ST"],
+                "Monitored": true,
+                "FramedVehicleJourneyRef": {
+                  "DatedVehicleJourneyRef": "MTA_47374776-EX-EX_D6-Thursday-04"
+                },
+                "MonitoredCall": {
+                  "ExpectedDepartureTime": "2026-01-01T08:15:50.722-05:00",
+                  "StopPointRef": "MTA_990001",
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            },
+            {
+              "RecordedAtTime": "2026-01-01T07:59:47.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTA_C99",
+                "PublishedLineName": ["C99"],
+                "DestinationName": ["CITY CENTRE via 1 ST"],
+                "Monitored": true,
+                "ProgressStatus": ["layover"],
+                "FramedVehicleJourneyRef": {
+                  "DatedVehicleJourneyRef": "MTA_LAYOVER-EX-EX_D6-Thursday-04"
+                },
+                "MonitoredCall": {
+                  "AimedArrivalTime": "2026-01-01T08:20:00.000-05:00",
+                  "StopPointRef": "MTA_990001",
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            },
+            {
+              "RecordedAtTime": "2026-01-01T07:59:50.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTA_C99",
+                "PublishedLineName": [{ "value": "C99" }],
+                "DestinationName": ["CITY CENTRE via 1 ST"],
+                "Monitored": true,
+                "ProgressStatus": ["prevTrip"],
+                "FramedVehicleJourneyRef": {
+                  "DatedVehicleJourneyRef": "MTA_PREVTRIP-EX-EX_D6-Thursday-04"
+                },
+                "MonitoredCall": {
+                  "ExpectedArrivalTime": "2026-01-01T08:21:26.246-05:00",
+                  "StopPointRef": "MTA_990001",
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            },
+            {
+              "RecordedAtTime": "2026-01-01T07:59:52.000-05:00",
+              "MonitoredVehicleJourney": {
+                "LineRef": "MTA_Z9",
+                "PublishedLineName": ["Z9"],
+                "DestinationName": ["SOMEWHERE ELSE"],
+                "Monitored": true,
+                "MonitoredCall": {
+                  "ExpectedArrivalTime": "2026-01-01T08:03:00.000-05:00",
+                  "StopPointRef": "MTA_990001",
+                  "StopPointName": ["EXAMPLE RD/1 ST"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

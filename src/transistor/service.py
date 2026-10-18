@@ -7,7 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from . import gtfs
+from . import gtfs, siri
 from .board import build_board
 from .config import Config, Feed, Watch
 
@@ -80,11 +80,34 @@ class FeedWorker(threading.Thread):
         self._stop.set()
 
     def poll_once(self) -> int:
-        raw = gtfs.fetch(self.feed.url, timeout=self.cfg.request_timeout)
-        message = gtfs.parse(raw)
-        departures = gtfs.extract_departures(message, self.watches)
+        departures = self._poll_siri() if self.feed.kind == "siri" else self._poll_gtfs()
         self.store.record_success(self.feed.key, departures)
         return len(departures)
+
+    def _poll_gtfs(self) -> list:
+        raw = gtfs.fetch(self.feed.url, timeout=self.cfg.request_timeout)
+        message = gtfs.parse(raw)
+        return gtfs.extract_departures(message, self.watches)
+
+    def _poll_siri(self) -> list:
+        """One request per distinct stop — that is the shape of this API.
+
+        Several lines can share a stop, so the responses are merged and then
+        filtered through the same watch matching the GTFS-RT path uses.
+        """
+        api_key = self.cfg.siri_api_key
+        if not api_key:
+            raise RuntimeError("SIRI feed configured without an API key")
+
+        collected: list = []
+        for stop_id in sorted({w.stop_id for w in self.watches}):
+            url = siri.build_url(
+                self.feed.url, stop_id, api_key, self.cfg.siri_max_visits
+            )
+            log.debug("%s: monitoring stop %s", self.feed.key, stop_id)
+            payload = siri.fetch_json(url, timeout=self.cfg.request_timeout)
+            collected.extend(siri.parse_stop_monitoring(payload))
+        return gtfs.apply_window(collected, self.watches, time.time())
 
     def run(self) -> None:
         while not self._stop.is_set():
