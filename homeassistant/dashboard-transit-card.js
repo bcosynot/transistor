@@ -108,6 +108,11 @@ class DashboardTransitCard extends HTMLElement {
       this.shadowRoot.appendChild(this._card);
       this._body = document.createElement("div");
       this._body.className = "rows";
+      // The rows container MUST be a child of the card, not just a detached
+      // node holding markup: a detached `_body` is never painted, and
+      // `_renderHeader()` inserts the header *before* it — which throws
+      // NotFoundError against a real DOM when it has no parent.
+      this._card.appendChild(this._body);
       this._header = null;
     }
     this._render();
@@ -149,7 +154,9 @@ class DashboardTransitCard extends HTMLElement {
     if (!this._header) {
       this._header = document.createElement("div");
       this._header.className = "header";
-      this._card.insertBefore(this._header, this._body);
+      // Prepend: the header belongs above the rows. insertBefore() needs the
+      // reference node to already be a child of the card.
+      this._card.insertBefore(this._header, this._card.firstChild);
     }
     this._header.innerHTML = `<span>${this._esc(title || "")}</span><span class="meta">${this._esc(meta || "")}</span>`;
   }

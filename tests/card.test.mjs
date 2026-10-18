@@ -16,29 +16,49 @@ import assert from "node:assert/strict";
 class FakeElement {
   constructor(tag) {
     this.tagName = tag;
-    this.children = [];
+    this.childNodes = [];
     this.parentNode = null;
     this._html = "";
     this.className = "";
     this.style = {};
     this.textContent = "";
   }
+  get children() {
+    return this.childNodes;
+  }
+  get firstChild() {
+    return this.childNodes[0] ?? null;
+  }
   appendChild(child) {
+    if (child.parentNode) child.remove();
     child.parentNode = this;
-    this.children.push(child);
+    this.childNodes.push(child);
     return child;
   }
+  // A real DOM refuses insertBefore() when the reference node is not already a
+  // child — it throws NotFoundError. Modelling that is the whole point: an
+  // earlier stub silently appended instead, which hid a card that threw on
+  // every render and painted nothing at all.
   insertBefore(child, ref) {
+    if (ref !== null && ref !== undefined && ref.parentNode !== this) {
+      const err = new Error(
+        "Failed to execute 'insertBefore' on 'Node': The node before which " +
+          "the new node is to be inserted is not a child of this node.",
+      );
+      err.name = "NotFoundError";
+      throw err;
+    }
+    if (child.parentNode) child.remove();
     child.parentNode = this;
-    const i = this.children.indexOf(ref);
-    if (i < 0) this.children.push(child);
-    else this.children.splice(i, 0, child);
+    const i = this.childNodes.indexOf(ref);
+    if (i < 0) this.childNodes.push(child);
+    else this.childNodes.splice(i, 0, child);
     return child;
   }
   remove() {
     if (!this.parentNode) return;
-    const i = this.parentNode.children.indexOf(this);
-    if (i >= 0) this.parentNode.children.splice(i, 1);
+    const i = this.parentNode.childNodes.indexOf(this);
+    if (i >= 0) this.parentNode.childNodes.splice(i, 1);
     this.parentNode = null;
   }
   set innerHTML(value) {
@@ -50,6 +70,10 @@ class FakeElement {
   attachShadow() {
     this.shadowRoot = new FakeElement("#shadow");
     return this.shadowRoot;
+  }
+  /** Everything a browser would paint in this subtree, flattened. */
+  paintedText() {
+    return this._html + this.childNodes.map((c) => c.paintedText()).join("");
   }
 }
 
@@ -71,6 +95,11 @@ function makeCard(entityId, state) {
   card.setConfig({ entity: entityId });
   card.hass = state === undefined ? { states: {} } : { states: { [entityId]: state } };
   return card;
+}
+
+/** The <ha-card> in the shadow root — the only thing the browser paints. */
+function haCard(card) {
+  return card.shadowRoot.childNodes.find((n) => n.tagName === "ha-card");
 }
 
 const BOARD = {
@@ -185,4 +214,54 @@ test("markup in feed data is escaped", () => {
   assert.ok(!html.includes("<img"), "raw tag must not survive");
   assert.ok(!html.includes("<script"), "raw tag must not survive");
   assert.match(html, /&lt;script&gt;/);
+});
+
+// --- regression: the card must be *painted*, not merely built ---------------
+//
+// The rows container was created but never appended to <ha-card>, so nothing
+// the card produced was in the shadow tree: HA showed a full-width card whose
+// only height was its own padding. Every assertion above still passed, because
+// `_body.innerHTML` is readable on a detached node. These tests assert the
+// shadow tree itself.
+
+test("the rows container is a child of the card, not a detached node", () => {
+  const card = makeCard("sensor.dashboard_transit", BOARD);
+  assert.equal(card._body.parentNode, haCard(card), "rows must be in the shadow tree");
+});
+
+test("the card paints its rows into <ha-card>", () => {
+  const card = makeCard("sensor.dashboard_transit", BOARD);
+  const painted = haCard(card).paintedText();
+  assert.match(painted, /Example Av/);
+  assert.match(painted, /C99/);
+  assert.equal((painted.match(/class="row"/g) || []).length, 4);
+});
+
+test("the header is inside <ha-card> and sits above the rows", () => {
+  const card = makeCard("sensor.dashboard_transit", BOARD);
+  const card_ = haCard(card);
+  assert.equal(card._header.parentNode, card_, "header must be in the shadow tree");
+  assert.equal(card_.childNodes.indexOf(card._header), 0, "header renders first");
+  assert.equal(card_.childNodes.indexOf(card._body), 1, "rows follow the header");
+});
+
+test("a header-less render still paints the rows", () => {
+  const card = new Card();
+  card.setConfig({ entity: "sensor.dashboard_transit", title: null });
+  card.hass = { states: { "sensor.dashboard_transit": BOARD } };
+  assert.equal(card._header, null, "no header when title is null and nothing is stale");
+  assert.match(haCard(card).paintedText(), /Example Av/);
+});
+
+test("a placeholder for a missing entity reaches the shadow tree", () => {
+  const card = makeCard("sensor.nope", undefined);
+  assert.match(haCard(card).paintedText(), /not found/);
+});
+
+test("re-rendering on every hass update does not duplicate the header", () => {
+  const card = makeCard("sensor.dashboard_transit", BOARD);
+  card.hass = { states: { "sensor.dashboard_transit": BOARD } };
+  card.hass = { states: { "sensor.dashboard_transit": BOARD } };
+  const headers = haCard(card).childNodes.filter((n) => n.className === "header");
+  assert.equal(headers.length, 1);
 });
