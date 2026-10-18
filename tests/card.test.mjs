@@ -235,7 +235,7 @@ test("the clock time sits beside the countdown, not under it", () => {
 
 test("the clock time is set smaller than the countdown", () => {
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 1\.7rem/);
+  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 2\.4rem/);
   assert.match(css, /\.dep \.at\s*\{[^}]*font-size: 0\.8rem/);
 });
 

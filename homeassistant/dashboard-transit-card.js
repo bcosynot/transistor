@@ -72,7 +72,7 @@ ha-card {
   display: flex; align-items: baseline; justify-content: flex-end;
   gap: 4px; min-width: 0; white-space: nowrap;
 }
-.dep .min { font-size: 1.7rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.dep .min { font-size: 2.4rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .dep .at { font-size: 0.8rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .dep.empty .min { opacity: 0.3; }
 .none { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 8px 0; }
