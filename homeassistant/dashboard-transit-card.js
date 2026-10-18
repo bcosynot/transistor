@@ -48,8 +48,9 @@ ha-card {
   display: grid;
   /* Fixed badge column, equal departure columns. Each row is its own grid, so
    * content-sized columns would resolve per row and the numbers would stop
-   * lining up down the card. 56px fits the widest pill. */
-  grid-template-columns: 56px repeat(4, minmax(0, 1fr));
+   * lining up down the card. 56px fits the widest pill. The column count comes
+   * from the card's departures option, via the --dep-columns custom property. */
+  grid-template-columns: 56px repeat(var(--dep-columns, 3), minmax(0, 1fr));
   align-items: center;
   column-gap: 8px;
 }
@@ -71,8 +72,8 @@ ha-card {
   display: flex; align-items: baseline; justify-content: flex-end;
   gap: 4px; min-width: 0; white-space: nowrap;
 }
-.dep .min { font-size: 1.28rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
-.dep .at { font-size: 0.68rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.dep .min { font-size: 1.7rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.dep .at { font-size: 0.8rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .dep.empty .min { opacity: 0.3; }
 .none { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 8px 0; }
 .state-stale .header .meta { color: var(--warning-color, #ffa726); opacity: 1; }
@@ -129,6 +130,8 @@ class DashboardTransitCard extends HTMLElement {
 
   _render() {
     const entityId = this._config.entity;
+    // The row grid's column count has to match the cells actually rendered.
+    this.style.setProperty("--dep-columns", String(this._departures()));
     const state = this._hass && this._hass.states ? this._hass.states[entityId] : undefined;
 
     if (!state) {
@@ -204,7 +207,9 @@ class DashboardTransitCard extends HTMLElement {
 
   _departures() {
     const n = Number(this._config.departures);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 4;
+    // Three by default: at the card's ~400px the countdown has to stay big
+    // enough to read across a room, and a fourth column forces it down.
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 3;
   }
 
   _setBody(html) {

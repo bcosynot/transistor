@@ -20,7 +20,7 @@ class FakeElement {
     this.parentNode = null;
     this._html = "";
     this.className = "";
-    this.style = {};
+    this.style = this.makeStyle();
     this.textContent = "";
   }
   get children() {
@@ -66,6 +66,19 @@ class FakeElement {
   }
   get innerHTML() {
     return this._html;
+  }
+  /** Enough of CSSStyleDeclaration for custom-property assertions. */
+  makeStyle() {
+    const props = new Map();
+    return {
+      setProperty(name, value) {
+        props.set(name, String(value));
+      },
+      getPropertyValue(name) {
+        return props.get(name) ?? "";
+      },
+      _props: props,
+    };
   }
   attachShadow() {
     this.shadowRoot = new FakeElement("#shadow");
@@ -159,14 +172,14 @@ test("neither the stop name nor the direction is rendered", () => {
   assert.ok(!html.includes('class="stop"'), "no stop/direction element at all");
 });
 
-test("renders four departure columns by default", () => {
+test("renders three departure columns by default", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  // The A row carries five departures; only the first four get a column.
+  // The A row carries five departures; only the first three get a column.
   const aRow = html.split('<div class="row">').find((r) => r.includes(">A<"));
-  assert.equal((aRow.match(/class="dep/g) || []).length, 4);
+  assert.equal((aRow.match(/class="dep/g) || []).length, 3);
   assert.match(aRow, /class="min">3</);
-  assert.match(aRow, /class="min">21</);
-  assert.ok(!aRow.includes(">27<"), "the fifth departure must not render");
+  assert.match(aRow, /class="min">15</);
+  assert.ok(!aRow.includes(">21<"), "the fourth departure must not render");
 });
 
 test("the departures option sets the column count", () => {
@@ -177,12 +190,25 @@ test("the departures option sets the column count", () => {
   assert.ok(!aRow.includes(">15<"), "third departure must not render at departures: 2");
 });
 
+test("the row grid's column count follows the departures option", () => {
+  // A hardcoded repeat() would leave a dead column and squeeze the cells
+  // whenever the count and the rendering disagreed.
+  const three = makeCard("sensor.dashboard_transit", BOARD);
+  assert.equal(three.style.getPropertyValue("--dep-columns"), "3");
+  const five = makeCard("sensor.dashboard_transit", BOARD, { departures: 5 });
+  assert.equal(five.style.getPropertyValue("--dep-columns"), "5");
+  assert.match(
+    three.shadowRoot.childNodes[0].textContent,
+    /grid-template-columns: 56px repeat\(var\(--dep-columns, 3\), minmax\(0, 1fr\)\)/,
+  );
+});
+
 test("a short line still renders every column", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   const cRow = html.split('<div class="row">').find((r) => r.includes(">C99<"));
-  // Two departures, four columns: two filled, two empty.
-  assert.equal((cRow.match(/class="dep/g) || []).length, 4);
-  assert.equal((cRow.match(/class="dep empty"/g) || []).length, 2);
+  // Two departures, three columns: two filled, one empty.
+  assert.equal((cRow.match(/class="dep/g) || []).length, 3);
+  assert.equal((cRow.match(/class="dep empty"/g) || []).length, 1);
 });
 
 test("the line badge is sized to be read across a room", () => {
@@ -197,7 +223,7 @@ test("the badge column is fixed and the departure columns equal", () => {
   // Each row is its own grid, so content-sized columns would resolve per row and
   // the numbers would stop lining up down the card.
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: 56px repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: 56px repeat\(var\(--dep-columns/);
 });
 
 test("the clock time sits beside the countdown, not under it", () => {
@@ -209,8 +235,8 @@ test("the clock time sits beside the countdown, not under it", () => {
 
 test("the clock time is set smaller than the countdown", () => {
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 1\.28rem/);
-  assert.match(css, /\.dep \.at\s*\{[^}]*font-size: 0\.68rem/);
+  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 1\.7rem/);
+  assert.match(css, /\.dep \.at\s*\{[^}]*font-size: 0\.8rem/);
 });
 
 test("departure minutes carry no unit suffix", () => {
@@ -228,10 +254,10 @@ test("a departure under a minute reads as 'now'", () => {
   assert.match(html, /class="min">now</);
 });
 
-test("a line with no service gets one dash, not four", () => {
+test("a line with no service gets one dash, not one per column", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   const bRow = html.split('<div class="row">').find((r) => r.includes(">B<"));
-  assert.equal((bRow.match(/class="dep empty"/g) || []).length, 4);
+  assert.equal((bRow.match(/class="dep empty"/g) || []).length, 3);
   assert.equal((bRow.match(/—/g) || []).length, 1, "exactly one dash for the whole line");
 });
 
