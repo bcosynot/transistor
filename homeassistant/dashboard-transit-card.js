@@ -1,9 +1,13 @@
 /**
  * dashboard-transit-card
  *
- * Renders the transistor MQTT board (sensor.dashboard_transit) as a dense row
- * per line: route badge, stop/direction, then the next two departures with
- * minutes-away as the primary value and the clock time as the secondary.
+ * Renders the transistor MQTT board (sensor.dashboard_transit) as one row per
+ * line: a route badge sized to be read across a room, the direction, then the
+ * next two departures — minutes away as the primary value (no "min" suffix: it
+ * is the same on every row, so it only ate width) and the clock time beneath.
+ *
+ * The stop name is deliberately omitted; the board is one stop per mode, so it
+ * was identical on every row.
  *
  * Config:
  *   type: custom:dashboard-transit-card
@@ -41,28 +45,29 @@ ha-card {
 .rows { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: center; }
 .row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  /* Fixed badge column: each row is its own grid, so an auto column would size
+   * per row and the directions and departure numbers would not line up down the
+   * card. 56px fits the widest pill (Q100 at 1rem + 8px padding). */
+  grid-template-columns: 56px minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: 10px;
 }
 .badge {
-  width: 30px; height: 30px;
-  border-radius: 50%;
+  justify-self: center;
+  min-width: 40px; height: 40px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 1.25rem;
   line-height: 1;
 }
-.badge.wide { border-radius: 15px; font-size: 0.68rem; }
+.badge.wide { font-size: 1rem; }
 .stop { min-width: 0; }
-.stop .name {
-  font-size: 0.82rem; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.stop .dir { font-size: 0.68rem; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stop .dir { font-size: 0.85rem; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dep { text-align: right; min-width: 52px; }
 .dep .min { font-size: 1.28rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
-.dep .min small { font-size: 0.6rem; font-weight: 400; opacity: 0.6; margin-left: 1px; }
 .dep .at { font-size: 0.7rem; opacity: 0.55; font-variant-numeric: tabular-nums; }
 .dep.empty .min { opacity: 0.3; }
 .none { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 8px 0; }
@@ -168,9 +173,11 @@ class DashboardTransitCard extends HTMLElement {
     const wide = lineName.length > 2;
     const badge = `<div class="badge${wide ? " wide" : ""}" style="background:${colors.bg};color:${colors.fg}">${this._esc(lineName)}</div>`;
 
+    // The stop name is deliberately not shown — the board is one stop per mode, so the
+    // name was the same on every row and only pushed the numbers apart. The direction
+    // stays: it is what tells the two bus lines apart.
     const stop = `
       <div class="stop">
-        <div class="name">${this._esc(line.stop || "")}</div>
         <div class="dir">${this._esc(line.direction || "")}</div>
       </div>`;
 
@@ -181,7 +188,7 @@ class DashboardTransitCard extends HTMLElement {
         return `<div class="dep empty"><div class="min">—</div></div>`;
       }
       const min = Number(dep.min);
-      const label = min <= 0 ? "now" : `${min}<small>min</small>`;
+      const label = min <= 0 ? "now" : String(min);
       return `<div class="dep"><div class="min">${label}</div><div class="at">${this._esc(dep.at || "")}</div></div>`;
     });
 
