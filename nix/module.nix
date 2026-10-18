@@ -110,7 +110,7 @@ in
 
     topN = mkOption {
       type = types.ints.positive;
-      default = 2;
+      default = 5;
       description = "How many upcoming departures to report per line.";
     };
 

@@ -90,9 +90,9 @@ globalThis.window = {};
 await import("../homeassistant/dashboard-transit-card.js");
 const Card = defined.get("dashboard-transit-card");
 
-function makeCard(entityId, state) {
+function makeCard(entityId, state, config = {}) {
   const card = new Card();
-  card.setConfig({ entity: entityId });
+  card.setConfig({ entity: entityId, ...config });
   card.hass = state === undefined ? { states: {} } : { states: { [entityId]: state } };
   return card;
 }
@@ -103,14 +103,17 @@ function haCard(card) {
 }
 
 const BOARD = {
-  state: "A 3/9 · B — · C99 4/12 · D44 6/14",
+  state: "A 3/9 · B — · C99 4/12 · D44 now/6",
   attributes: {
     stale: false,
     generated: "2026-01-01T08:00:00+00:00",
     lines: [
       {
         line: "A", mode: "subway", stop: "Example Av", direction: "Downtown",
-        deps: [{ min: 3, at: "8:03am" }, { min: 9, at: "8:09am" }],
+        deps: [
+          { min: 3, at: "8:03am" }, { min: 9, at: "8:09am" }, { min: 15, at: "8:15am" },
+          { min: 21, at: "8:21am" }, { min: 27, at: "8:27am" },
+        ],
       },
       { line: "B", mode: "subway", stop: "Example Av", direction: "Downtown", deps: [] },
       {
@@ -144,17 +147,42 @@ test("claims the full grid width", () => {
 test("renders one row per line", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.equal((html.match(/class="row"/g) || []).length, 4);
-  assert.match(html, /Downtown/);
-  assert.match(html, /City Centre/);
 });
 
-test("the stop name is not rendered", () => {
-  // Every line is at the same stop per mode, so the name was identical on every row
-  // and only pushed the departure numbers apart. The direction stays.
+test("neither the stop name nor the direction is rendered", () => {
+  // One stop and one direction per line, so both were identical on every row.
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.ok(!html.includes("Example Av"), "subway stop name must not render");
   assert.ok(!html.includes("Example Rd/1 St"), "bus stop name must not render");
-  assert.ok(!html.includes('class="name"'), "no stop-name element at all");
+  assert.ok(!html.includes("Downtown"), "subway direction must not render");
+  assert.ok(!html.includes("City Centre"), "bus direction must not render");
+  assert.ok(!html.includes('class="stop"'), "no stop/direction element at all");
+});
+
+test("renders four departure columns by default", () => {
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
+  // The A row carries five departures; only the first four get a column.
+  const aRow = html.split('<div class="row">').find((r) => r.includes(">A<"));
+  assert.equal((aRow.match(/class="dep/g) || []).length, 4);
+  assert.match(aRow, /class="min">3</);
+  assert.match(aRow, /class="min">21</);
+  assert.ok(!aRow.includes(">27<"), "the fifth departure must not render");
+});
+
+test("the departures option sets the column count", () => {
+  const html = makeCard("sensor.dashboard_transit", BOARD, { departures: 2 })._body.innerHTML;
+  const aRow = html.split('<div class="row">').find((r) => r.includes(">A<"));
+  assert.equal((aRow.match(/class="dep/g) || []).length, 2);
+  assert.match(aRow, /class="min">9</);
+  assert.ok(!aRow.includes(">15<"), "third departure must not render at departures: 2");
+});
+
+test("a short line still renders every column", () => {
+  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
+  const cRow = html.split('<div class="row">').find((r) => r.includes(">C99<"));
+  // Two departures, four columns: two filled, two empty.
+  assert.equal((cRow.match(/class="dep/g) || []).length, 4);
+  assert.equal((cRow.match(/class="dep empty"/g) || []).length, 2);
 });
 
 test("the line badge is sized to be read across a room", () => {
@@ -165,17 +193,24 @@ test("the line badge is sized to be read across a room", () => {
   assert.match(css, /\.badge\.wide\s*\{[^}]*font-size: 1rem/);
 });
 
-test("the badge column is fixed so rows line up", () => {
-  // Each row is its own grid, so an auto badge column would size per row and
-  // misalign the directions and numbers down the card.
+test("the badge column is fixed and the departure columns equal", () => {
+  // Each row is its own grid, so content-sized columns would resolve per row and
+  // the numbers would stop lining up down the card.
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: 56px minmax\(0, 1fr\) auto auto/);
+  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: 56px repeat\(4, minmax\(0, 1fr\)\)/);
 });
 
-test("shows minutes as the primary value and clock time as secondary", () => {
+test("the clock time sits beside the countdown, not under it", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  assert.match(html, /class="min">3<\/div>/);
-  assert.match(html, /8:03am/);
+  // Both values inside one .dep cell, countdown first.
+  assert.match(html, /<div class="dep"><span class="min">3<\/span><span class="at">8:03am<\/span><\/div>/);
+  assert.ok(!/<div class="at">/.test(html), "the clock time is a span, not its own block");
+});
+
+test("the clock time is set smaller than the countdown", () => {
+  const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
+  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 1\.28rem/);
+  assert.match(css, /\.dep \.at\s*\{[^}]*font-size: 0\.68rem/);
 });
 
 test("departure minutes carry no unit suffix", () => {
@@ -193,10 +228,11 @@ test("a departure under a minute reads as 'now'", () => {
   assert.match(html, /class="min">now</);
 });
 
-test("a line with no service renders an empty cell, not a crash", () => {
+test("a line with no service gets one dash, not four", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  // The B row exists with a dash and no clock time.
-  assert.match(html, /class="dep empty"/);
+  const bRow = html.split('<div class="row">').find((r) => r.includes(">B<"));
+  assert.equal((bRow.match(/class="dep empty"/g) || []).length, 4);
+  assert.equal((bRow.match(/—/g) || []).length, 1, "exactly one dash for the whole line");
 });
 
 test("bus and subway badges are colour-coded", () => {
@@ -237,7 +273,8 @@ test("markup in feed data is escaped", () => {
       lines: [
         {
           line: "<img src=x onerror=alert(1)>", mode: "bus",
-          stop: "<b>unused</b>", direction: "<script>", deps: [],
+          stop: "<b>unused</b>", direction: "<i>unused</i>",
+          deps: [{ min: 1, at: "<script>" }],
         },
       ],
     },
@@ -264,7 +301,7 @@ test("the rows container is a child of the card, not a detached node", () => {
 test("the card paints its rows into <ha-card>", () => {
   const card = makeCard("sensor.dashboard_transit", BOARD);
   const painted = haCard(card).paintedText();
-  assert.match(painted, /Downtown/);
+  assert.match(painted, /8:03am/);
   assert.match(painted, /C99/);
   assert.equal((painted.match(/class="row"/g) || []).length, 4);
 });
@@ -282,7 +319,7 @@ test("a header-less render still paints the rows", () => {
   card.setConfig({ entity: "sensor.dashboard_transit", title: null });
   card.hass = { states: { "sensor.dashboard_transit": BOARD } };
   assert.equal(card._header, null, "no header when title is null and nothing is stale");
-  assert.match(haCard(card).paintedText(), /Downtown/);
+  assert.match(haCard(card).paintedText(), /8:03am/);
 });
 
 test("a placeholder for a missing entity reaches the shadow tree", () => {

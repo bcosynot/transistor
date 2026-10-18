@@ -69,7 +69,9 @@ def build_board(
 
     parts = []
     for entry in lines:
-        mins = "/".join(str(d["min"]) for d in entry["deps"]) or "—"
+        # Two-minute glance only: this is the entity's state string, not the
+        # dashboard row, which shows every departure.
+        mins = "/".join(str(d["min"]) for d in entry["deps"][:2]) or "—"
         parts.append(f"{entry['line']} {mins}")
 
     return {

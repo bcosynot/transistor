@@ -111,6 +111,20 @@ def test_summary_shape(now):
     assert board["summary"] == "A 3/9 · B — · C9 4 · D4 —"
 
 
+def test_summary_keeps_only_the_first_two_minutes(now):
+    """The state string stays a short glance even though the payload carries
+    every departure the line's top_n allows."""
+    board = build_board(
+        make_cfg(top_n=5),
+        {"subway": [dep("A", PLATFORM_S, now + t) for t in (300, 600, 900, 1200, 1500)], "bus": []},
+        {"subway": {"stale": False}, "bus": {"stale": False}},
+        now=now,
+    )
+    a = next(e for e in board["lines"] if e["line"] == "A")
+    assert [d["min"] for d in a["deps"]] == [5, 10, 15, 20, 25]
+    assert board["summary"].startswith("A 5/10 · ")
+
+
 def test_times_are_rendered_in_configured_timezone(now):
     board = build_board(
         make_cfg(),

@@ -49,7 +49,11 @@ DEFAULT_URL = "https://bustime-classic.mta.info/api/siri/stop-monitoring.json"
 OPERATOR_REF = "MTA"
 
 # A stop can serve several routes; enough visits to fill top_n for each.
-DEFAULT_MAX_VISITS = 10
+# Measured at the bus stop this board watches: MaximumStopVisits=10 returned 10
+# of the 11 visits the API had available (Q69 6 / Q100 4), while 20 returned all
+# 11 for ~1 KB more. Ask for 20 so a busier moment does not truncate a line
+# before it has filled its own top_n.
+DEFAULT_MAX_VISITS = 20
 
 
 def _unwrap(node: Any) -> Any:

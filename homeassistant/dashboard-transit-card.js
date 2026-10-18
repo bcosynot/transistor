@@ -2,17 +2,18 @@
  * dashboard-transit-card
  *
  * Renders the transistor MQTT board (sensor.dashboard_transit) as one row per
- * line: a route badge sized to be read across a room, the direction, then the
- * next two departures — minutes away as the primary value (no "min" suffix: it
- * is the same on every row, so it only ate width) and the clock time beneath.
+ * line: a route badge sized to be read across a room, then the next N
+ * departures, each showing minutes away (no "min" suffix: it is the same on
+ * every column, so it only ate width) with the clock time beside it.
  *
- * The stop name is deliberately omitted; the board is one stop per mode, so it
- * was identical on every row.
+ * The stop name and direction are deliberately omitted; the board is one stop
+ * and one direction per line, so both were identical on every row.
  *
  * Config:
  *   type: custom:dashboard-transit-card
  *   entity: sensor.dashboard_transit
- *   title: Transit            # optional, hides the header when null
+ *   title: Transit              # optional, hides the header when null
+ *   departures: 4               # optional, columns to render
  *
  * Written as a plain custom element (no Lit, no build step) because a
  * markdown card cannot carry the styling — HA strips every `style` attribute
@@ -45,12 +46,12 @@ ha-card {
 .rows { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: center; }
 .row {
   display: grid;
-  /* Fixed badge column: each row is its own grid, so an auto column would size
-   * per row and the directions and departure numbers would not line up down the
-   * card. 56px fits the widest pill (Q100 at 1rem + 8px padding). */
-  grid-template-columns: 56px minmax(0, 1fr) auto auto;
+  /* Fixed badge column, equal departure columns. Each row is its own grid, so
+   * content-sized columns would resolve per row and the numbers would stop
+   * lining up down the card. 56px fits the widest pill. */
+  grid-template-columns: 56px repeat(4, minmax(0, 1fr));
   align-items: center;
-  column-gap: 10px;
+  column-gap: 8px;
 }
 .badge {
   justify-self: center;
@@ -64,11 +65,14 @@ ha-card {
   line-height: 1;
 }
 .badge.wide { font-size: 1rem; }
-.stop { min-width: 0; }
-.stop .dir { font-size: 0.85rem; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dep { text-align: right; min-width: 52px; }
+/* Clock time sits beside the countdown rather than under it — a fourth
+   departure fits in the row only if the two share a line. */
+.dep {
+  display: flex; align-items: baseline; justify-content: flex-end;
+  gap: 4px; min-width: 0; white-space: nowrap;
+}
 .dep .min { font-size: 1.28rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
-.dep .at { font-size: 0.7rem; opacity: 0.55; font-variant-numeric: tabular-nums; }
+.dep .at { font-size: 0.68rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
 .dep.empty .min { opacity: 0.3; }
 .none { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 8px 0; }
 .state-stale .header .meta { color: var(--warning-color, #ffa726); opacity: 1; }
@@ -173,26 +177,34 @@ class DashboardTransitCard extends HTMLElement {
     const wide = lineName.length > 2;
     const badge = `<div class="badge${wide ? " wide" : ""}" style="background:${colors.bg};color:${colors.fg}">${this._esc(lineName)}</div>`;
 
-    // The stop name is deliberately not shown — the board is one stop per mode, so the
-    // name was the same on every row and only pushed the numbers apart. The direction
-    // stays: it is what tells the two bus lines apart.
-    const stop = `
-      <div class="stop">
-        <div class="dir">${this._esc(line.direction || "")}</div>
-      </div>`;
-
+    // Neither the stop name nor the direction is shown: the board watches one
+    // stop and one direction per line, so both were identical on every row.
     const deps = Array.isArray(line.deps) ? line.deps : [];
-    const cells = [0, 1].map((idx) => {
+    const count = this._departures();
+    const cells = [];
+    for (let idx = 0; idx < count; idx++) {
       const dep = deps[idx];
       if (!dep) {
-        return `<div class="dep empty"><div class="min">—</div></div>`;
+        // A line with no service at all gets a single dash in its first column,
+        // not one per empty column.
+        const dash = deps.length === 0 && idx === 0 ? '<span class="min">—</span>' : "";
+        cells.push(`<div class="dep empty">${dash}</div>`);
+        continue;
       }
       const min = Number(dep.min);
       const label = min <= 0 ? "now" : String(min);
-      return `<div class="dep"><div class="min">${label}</div><div class="at">${this._esc(dep.at || "")}</div></div>`;
-    });
+      cells.push(
+        `<div class="dep"><span class="min">${label}</span>` +
+          `<span class="at">${this._esc(dep.at || "")}</span></div>`
+      );
+    }
 
-    return `<div class="row">${badge}${stop}${cells.join("")}</div>`;
+    return `<div class="row">${badge}${cells.join("")}</div>`;
+  }
+
+  _departures() {
+    const n = Number(this._config.departures);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 4;
   }
 
   _setBody(html) {
@@ -206,7 +218,7 @@ class DashboardTransitCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { entity: "sensor.dashboard_transit", title: "Transit" };
+    return { entity: "sensor.dashboard_transit", title: "Transit", departures: 4 };
   }
 }
 

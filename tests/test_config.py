@@ -64,7 +64,7 @@ def test_the_error_says_why_and_shows_the_shape():
 
 def test_generic_defaults_are_location_neutral():
     cfg = load_config(minimal())
-    assert cfg.top_n == 2
+    assert cfg.top_n == 5
     assert cfg.mqtt_prefix == "transistor"
     assert cfg.mqtt_port == 1883
     assert cfg.publish_interval == 15.0
