@@ -115,6 +115,21 @@ function haCard(card) {
   return card.shadowRoot.childNodes.find((n) => n.tagName === "ha-card");
 }
 
+/** The rendered markup of one line's row, found by its badge label. */
+function row(html, lineName) {
+  return html.split('<div class="row">').find((r) => r.includes(`>${lineName}<`));
+}
+
+/** One line's row markup for the standard BOARD. */
+function boardRow(lineName, config = {}) {
+  const card = makeCard("sensor.dashboard_transit", BOARD, config);
+  return row(card._body.innerHTML, lineName);
+}
+
+// Line A is a subway (12 min walk) with five departures, the first two of them
+// (3 and 9 min) already unreachable — so its columns start at 15. C99 is a bus
+// (3 min walk), so its 4 min departure is still catchable. D44 is a bus whose
+// only departure is leaving now: nothing on that line is catchable at all.
 const BOARD = {
   state: "A 3/9 · B — · C99 4/12 · D44 now/6",
   attributes: {
@@ -172,22 +187,146 @@ test("neither the stop name nor the direction is rendered", () => {
   assert.ok(!html.includes('class="stop"'), "no stop/direction element at all");
 });
 
-test("renders three departure columns by default", () => {
-  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  // The A row carries five departures; only the first three get a column.
-  const aRow = html.split('<div class="row">').find((r) => r.includes(">A<"));
-  assert.equal((aRow.match(/class="dep/g) || []).length, 3);
-  assert.match(aRow, /class="min">3</);
+// --- walk time: a departure you cannot reach is not a departure -------------
+
+test("a departure inside the walk time is lifted out of the columns", () => {
+  // A's 3 and 9 min departures are both inside the 12 min walk to the platform.
+  const aRow = boardRow("A");
+  const cells = aRow.slice(aRow.indexOf('class="lead"'));
+  assert.ok(!/class="min">3</.test(cells), "the 3 min departure must not be a column");
+  assert.ok(!/class="min">9</.test(cells), "the 9 min departure must not be a column");
+  assert.match(cells, /class="min">15</);
+  assert.equal((cells.match(/class="dep/g) || []).length, 3, "three catchable columns");
+});
+
+test("the uncatchable departure is shown to the right of the badge, outside the columns", () => {
+  const aRow = boardRow("A");
+  assert.match(aRow, /<div class="lead"><div class="badge[^>]*>A<\/div><span class="lost">3<\/span>/);
+  // ...and only the soonest of them, not every one that was dropped.
+  assert.equal((aRow.match(/class="lost"/g) || []).length, 1);
+  assert.ok(!/class="lost">9</.test(aRow));
+});
+
+test("only the soonest uncatchable departure is advertised", () => {
+  // Three minutes of walk, three buses inside it: only the first is shown.
+  const board = {
+    state: "x",
+    attributes: {
+      lines: [
+        {
+          line: "C99", mode: "bus", stop: "s", direction: "d",
+          deps: [
+            { min: 1, at: "8:01am" }, { min: 2, at: "8:02am" }, { min: 3, at: "8:03am" },
+            { min: 40, at: "8:40am" },
+          ],
+        },
+      ],
+    },
+  };
+  const cRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "C99");
+  assert.equal((cRow.match(/class="lost"/g) || []).length, 1);
+  assert.match(cRow, /class="lost">1</);
+  // The other two are dropped, and the next catchable one leads the columns.
+  assert.match(cRow, /<div class="dep"><span class="min">40</);
+});
+
+test("the walk time is per mode", () => {
+  // Same board: 3 min is unreachable by subway (12), 4 min is fine by bus (3).
+  assert.match(boardRow("A"), /class="lost">3</);
+  const cRow = boardRow("C99");
+  assert.match(cRow, /<span class="lost"><\/span>/);
+  assert.match(cRow, /<div class="dep"><span class="min">4</);
+});
+
+test("nothing catchable: the columns still render, dimmed", () => {
+  // D44's only departure is leaving now, and no bus in 3 min is catchable.
+  const dRow = boardRow("D44");
+  assert.equal((dRow.match(/class="dep unreachable"/g) || []).length, 1);
+  assert.equal((dRow.match(/class="dep empty"/g) || []).length, 2);
+  assert.match(dRow, /class="dep unreachable">\s*<span class="min">now</);
+  // Nothing is advertised separately: the columns already are that departure.
+  assert.match(dRow, /<span class="lost"><\/span>/);
+});
+
+test("the flag sits outside the departure columns and after the badge", () => {
+  // A row with nothing lifted still reserves the cell, so the flags line up
+  // down the card whatever each row carries.
+  const cRow = boardRow("C99");
+  assert.match(cRow, /<div class="badge wide"[^>]*>C99<\/div><span class="lost"><\/span>/);
+  // The flag is its own cell before the first departure column, never inside
+  // one of them.
+  const aRow = boardRow("A");
+  assert.ok(
+    aRow.indexOf('class="lost"') < aRow.indexOf('class="dep'),
+    "the flag must precede the departure columns",
+  );
+  assert.ok(!/class="dep[^"]*"><span class="lost"/.test(aRow), "the flag is not a departure cell");
+});
+
+test("walk_minutes overrides the default per mode", () => {
+  // Zero means "do not filter this mode": the subway row is back to raw order.
+  const aRow = boardRow("A", { walk_minutes: { subway: 0 } });
+  assert.match(aRow, /<span class="lost"><\/span>/);
+  assert.match(aRow, /<div class="dep"><span class="min">3</);
   assert.match(aRow, /class="min">15</);
-  assert.ok(!aRow.includes(">21<"), "the fourth departure must not render");
+});
+
+test("a single walk_minutes number applies to every mode", () => {
+  const aRow = boardRow("A", { walk_minutes: 5 });
+  assert.match(aRow, /class="lost">3</);
+  assert.match(aRow, /<div class="dep"><span class="min">9</); // 9 > 5, catchable
+  const cRow = boardRow("C99", { walk_minutes: 5 });
+  assert.match(cRow, /class="lost">4</);
+  assert.match(cRow, /<div class="dep"><span class="min">12</);
+});
+
+test("a mode the walk time does not mention is not filtered", () => {
+  const board = {
+    state: "x",
+    attributes: {
+      lines: [
+        { line: "F", mode: "tram", stop: "s", direction: "d", deps: [{ min: 1, at: "8:01am" }] },
+      ],
+    },
+  };
+  const fRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "F");
+  assert.match(fRow, /<span class="lost"><\/span>/);
+  assert.match(fRow, /<div class="dep"><span class="min">1</);
+});
+
+test("a nonsense walk_minutes value does not break the render", () => {
+  for (const walk_minutes of ["soon", null, {}, { subway: "later" }, -1, NaN]) {
+    const html = makeCard("sensor.dashboard_transit", BOARD, { walk_minutes })._body.innerHTML;
+    assert.equal((html.match(/class="row"/g) || []).length, 4, `walk_minutes: ${walk_minutes}`);
+    assert.match(html, /class="min">15</, `walk_minutes: ${walk_minutes} must fall back to the default`);
+  }
+});
+
+test("a line with no service advertises nothing", () => {
+  const bRow = boardRow("B");
+  assert.match(bRow, /<span class="lost"><\/span>/);
+  assert.equal((bRow.match(/class="dep empty"/g) || []).length, 3);
+});
+
+// --- columns, type, and layout ---------------------------------------------
+
+test("renders three departure columns by default", () => {
+  const aRow = boardRow("A");
+  // Five departures, two of them unreachable; the columns are what is left.
+  assert.equal((aRow.match(/class="dep/g) || []).length, 3);
+  assert.match(aRow, /class="min">15</);
+  assert.match(aRow, /class="min">21</);
+  assert.match(aRow, /class="min">27</);
+  const cells = aRow.slice(aRow.indexOf('class="lead"'));
+  assert.ok(!/class="min">9</.test(cells), "the dropped departure must not be a column");
 });
 
 test("the departures option sets the column count", () => {
-  const html = makeCard("sensor.dashboard_transit", BOARD, { departures: 2 })._body.innerHTML;
-  const aRow = html.split('<div class="row">').find((r) => r.includes(">A<"));
+  const aRow = boardRow("A", { departures: 2 });
   assert.equal((aRow.match(/class="dep/g) || []).length, 2);
-  assert.match(aRow, /class="min">9</);
-  assert.ok(!aRow.includes(">15<"), "third departure must not render at departures: 2");
+  assert.match(aRow, /class="min">15</);
+  assert.match(aRow, /class="min">21</);
+  assert.ok(!aRow.includes(">27<"), "third departure must not render at departures: 2");
 });
 
 test("the row grid's column count follows the departures option", () => {
@@ -199,13 +338,12 @@ test("the row grid's column count follows the departures option", () => {
   assert.equal(five.style.getPropertyValue("--dep-columns"), "5");
   assert.match(
     three.shadowRoot.childNodes[0].textContent,
-    /grid-template-columns: 56px repeat\(var\(--dep-columns, 3\), minmax\(0, 1fr\)\)/,
+    /grid-template-columns: var\(--lead-col, 78px\) repeat\(var\(--dep-columns, 3\), minmax\(0, 1fr\)\)/,
   );
 });
 
 test("a short line still renders every column", () => {
-  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  const cRow = html.split('<div class="row">').find((r) => r.includes(">C99<"));
+  const cRow = boardRow("C99");
   // Two departures, three columns: two filled, one empty.
   assert.equal((cRow.match(/class="dep/g) || []).length, 3);
   assert.equal((cRow.match(/class="dep empty"/g) || []).length, 1);
@@ -219,17 +357,27 @@ test("the line badge is sized to be read across a room", () => {
   assert.match(css, /\.badge\.wide\s*\{[^}]*font-size: 1rem/);
 });
 
-test("the badge column is fixed and the departure columns equal", () => {
+test("the lead column is fixed and the departure columns equal", () => {
   // Each row is its own grid, so content-sized columns would resolve per row and
   // the numbers would stop lining up down the card.
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: 56px repeat\(var\(--dep-columns/);
+  assert.match(css, /\.row\s*\{[^}]*grid-template-columns: var\(--lead-col/);
+});
+
+test("the uncatchable departure reads as struck through, not just amber", () => {
+  // Colour alone is a weak signal for a colour-blind reader; the strike carries
+  // the meaning. Its cell is fixed-width too, so it cannot move with its value
+  // and the flags stay in one column down the card.
+  const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
+  assert.match(css, /\.lead\s*\{[^}]*grid-template-columns: 52px var\(--lost-col, 22px\)/);
+  assert.match(css, /\.lead \.lost\s*\{[^}]*text-decoration: line-through/);
+  assert.match(css, /\.dep\.unreachable \.min[^{]*\{[^}]*opacity: 0\.45/);
 });
 
 test("the clock time sits beside the countdown, not under it", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   // Both values inside one .dep cell, countdown first.
-  assert.match(html, /<div class="dep"><span class="min">3<\/span><span class="at">8:03am<\/span><\/div>/);
+  assert.match(html, /<div class="dep"><span class="min">15<\/span><span class="at">8:15am<\/span><\/div>/);
   assert.ok(!/<div class="at">/.test(html), "the clock time is a span, not its own block");
 });
 
@@ -255,8 +403,7 @@ test("a departure under a minute reads as 'now'", () => {
 });
 
 test("a line with no service gets one dash, not one per column", () => {
-  const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
-  const bRow = html.split('<div class="row">').find((r) => r.includes(">B<"));
+  const bRow = boardRow("B");
   assert.equal((bRow.match(/class="dep empty"/g) || []).length, 3);
   assert.equal((bRow.match(/—/g) || []).length, 1, "exactly one dash for the whole line");
 });
@@ -327,8 +474,9 @@ test("the rows container is a child of the card, not a detached node", () => {
 test("the card paints its rows into <ha-card>", () => {
   const card = makeCard("sensor.dashboard_transit", BOARD);
   const painted = haCard(card).paintedText();
-  assert.match(painted, /8:03am/);
+  assert.match(painted, /8:15am/);
   assert.match(painted, /C99/);
+  assert.match(painted, /class="lost">3</);
   assert.equal((painted.match(/class="row"/g) || []).length, 4);
 });
 
@@ -345,7 +493,7 @@ test("a header-less render still paints the rows", () => {
   card.setConfig({ entity: "sensor.dashboard_transit", title: null });
   card.hass = { states: { "sensor.dashboard_transit": BOARD } };
   assert.equal(card._header, null, "no header when title is null and nothing is stale");
-  assert.match(haCard(card).paintedText(), /8:03am/);
+  assert.match(haCard(card).paintedText(), /8:15am/);
 });
 
 test("a placeholder for a missing entity reaches the shadow tree", () => {

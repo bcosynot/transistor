@@ -181,6 +181,37 @@ every 30 s.
 A markdown card cannot do this: HA strips every `style` attribute out of
 markdown content, so the presentation has to come from a custom element.
 
+### Walk time
+
+The card is not at the stop. Unless told otherwise it assumes **12 minutes to
+reach a subway platform and 3 minutes to reach a bus stop**, and treats any
+departure closer than that as one you will watch leave:
+
+- The uncatchable departures are lifted out of the departure columns, so the
+  columns show the next three departures you can actually make.
+- The soonest uncatchable one is shown struck through just right of the route
+  badge — outside the columns, so the three big numbers stay three big numbers.
+- When nothing at all is catchable (a bus every 2 min against a 3 min walk) the
+  soonest departures render anyway at 45% opacity, so a row is never blank and
+  the flag position is left empty rather than repeating column one.
+
+```yaml
+- type: custom:dashboard-transit-card
+  entity: sensor.dashboard_transit
+  departures: 3
+  walk_minutes:
+    subway: 12     # mode: minutes needed to reach the stop
+    bus: 3         # 0 turns the filter off for that mode
+```
+
+A mode the option does not mention is not filtered, and a bare number applies to
+every mode. These minutes are the card's own assumption about your walk, which
+is why they are card config rather than something the service publishes.
+
+The filter drops from the list the service sent, so keep `topN` above the
+card's `departures` count — the difference is what absorbs a skipped
+departure. At the default `topN = 5` against 3 columns, two are spare.
+
 ## Development
 
 ```sh

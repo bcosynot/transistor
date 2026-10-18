@@ -23,6 +23,12 @@
         - type: custom:dashboard-transit-card
           entity: sensor.dashboard_transit
           title: Transit
+          # Optional. A departure closer than this is one you cannot reach, so
+          # it is lifted out of the columns and shown beside the route badge.
+          # Defaults to {subway: 12, bus: 3}; 0 disables it for a mode.
+          walk_minutes:
+            subway: 12
+            bus: 3
 
 # ---- Option B: inside the existing top 3-column grid card ----
 # The top section already holds a `grid` card with columns: 3. Appending the
