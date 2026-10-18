@@ -1,0 +1,39 @@
+# Home Assistant entities for transistor.
+#
+# Paste this under the existing top-level `mqtt:` key in /config/configuration.yaml
+# (or merge the `sensor:` list if you already have one). Then reload with
+# Developer Tools -> YAML -> "MQTT" (the mqtt integration has no reload service
+# for YAML-defined entities, so a core restart is the reliable path).
+#
+# One entity carries the whole board as attributes; the kiosk card renders it.
+
+mqtt:
+  sensor:
+    - name: "Kitchen Transit"
+      unique_id: transistor_board
+      object_id: kitchen_transit
+      state_topic: "transistor/state"
+      value_template: "{{ value_json.summary }}"
+      json_attributes_topic: "transistor/state"
+      availability_topic: "transistor/status"
+      payload_available: "online"
+      payload_not_available: "offline"
+      icon: mdi:bus-clock
+      # The payload is a small document (a few hundred bytes) republished every
+      # 15 s. Keeping it out of the recorder avoids filling the DB with
+      # near-identical rows on a RAM-tight box.
+      expire_after: 120
+
+  # A separate binary sensor makes "the feed went stale" a first-class trigger
+  # for automations, instead of something a template has to dig out.
+  binary_sensor:
+    - name: "Kitchen Transit Stale"
+      unique_id: transistor_stale
+      object_id: kitchen_transit_stale
+      state_topic: "transistor/state"
+      value_template: "{{ value_json.stale }}"
+      availability_topic: "transistor/status"
+      payload_available: "online"
+      payload_not_available: "offline"
+      device_class: problem
+      icon: mdi:alert-circle-outline

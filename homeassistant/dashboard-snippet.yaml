@@ -1,0 +1,41 @@
+# Kitchen kiosk wiring for transistor.
+#
+# 1. Deploy the card to /config/www/kitchen-transit-card.js
+# 2. Register it as a Lovelace resource (websocket API):
+#      {"type":"lovelace/resources/create",
+#       "url":"/local/kitchen-transit-card.js?v=1",
+#       "res_type":"module"}
+#    Bump ?v= on every JS change with lovelace/resources/update, which takes
+#    `resource_id` (not `id`) alongside the new url.
+# 3. Add the card below to the kitchen-kiosk dashboard, in its own view
+#    *section* so it can be given the full row width.
+#
+# The card reads sensor.kitchen_transit (see mqtt_sensors.yaml).
+
+# ---- Option A: a dedicated section directly under the existing top grid ----
+# Insert as an element of views[0].sections:
+- type: sections
+  max_columns: 3
+  sections:
+    # ... existing sections (weather grid, meeting banner, lights grid) ...
+    - column_span: 4          # full width, whatever the view's column count
+      cards:
+        - type: custom:kitchen-transit-card
+          entity: sensor.kitchen_transit
+          title: Transit
+
+# ---- Option B: inside the existing top 3-column grid card ----
+# The top section already holds a `grid` card with columns: 3. Appending the
+# transit card there puts it under the three weather cards at one-third width,
+# which is too narrow for eight numbers — use Option A unless you deliberately
+# want it compact.
+
+# ---- Optional: surface staleness on the kiosk ----
+# A conditional card hides the banner whenever the feed is healthy:
+- type: conditional
+  conditions:
+    - entity: binary_sensor.kitchen_transit_stale
+      state: "on"
+  card:
+    type: markdown
+    content: "⚠️ Transit feed is stale — departure times may be wrong."
