@@ -130,6 +130,7 @@ function boardRow(lineName, config = {}) {
 // (3 and 9 min) already unreachable — so its columns start at 15. C99 is a bus
 // (3 min walk), so its 4 min departure is still catchable. D44 is a bus whose
 // only departure is leaving now: nothing on that line is catchable at all.
+// Every countdown below renders two digits ("03", not "3").
 const BOARD = {
   state: "A 3/9 · B — · C99 4/12 · D44 now/6",
   attributes: {
@@ -193,18 +194,18 @@ test("a departure inside the walk time is lifted out of the columns", () => {
   // A's 3 and 9 min departures are both inside the 12 min walk to the platform.
   const aRow = boardRow("A");
   const cells = aRow.slice(aRow.indexOf('class="lead"'));
-  assert.ok(!/class="min">3</.test(cells), "the 3 min departure must not be a column");
-  assert.ok(!/class="min">9</.test(cells), "the 9 min departure must not be a column");
+  assert.ok(!/class="min">03</.test(cells), "the 3 min departure must not be a column");
+  assert.ok(!/class="min">09</.test(cells), "the 9 min departure must not be a column");
   assert.match(cells, /class="min">15</);
   assert.equal((cells.match(/class="dep/g) || []).length, 3, "three catchable columns");
 });
 
 test("the uncatchable departure is shown to the right of the badge, outside the columns", () => {
   const aRow = boardRow("A");
-  assert.match(aRow, /<div class="lead"><div class="badge[^>]*>A<\/div><span class="lost">3<\/span>/);
+  assert.match(aRow, /<div class="lead"><div class="badge[^>]*>A<\/div><span class="lost">03<\/span>/);
   // ...and only the soonest of them, not every one that was dropped.
   assert.equal((aRow.match(/class="lost"/g) || []).length, 1);
-  assert.ok(!/class="lost">9</.test(aRow));
+  assert.ok(!/class="lost">09</.test(aRow));
 });
 
 test("only the soonest uncatchable departure is advertised", () => {
@@ -225,17 +226,17 @@ test("only the soonest uncatchable departure is advertised", () => {
   };
   const cRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "C99");
   assert.equal((cRow.match(/class="lost"/g) || []).length, 1);
-  assert.match(cRow, /class="lost">1</);
+  assert.match(cRow, /class="lost">01</);
   // The other two are dropped, and the next catchable one leads the columns.
   assert.match(cRow, /<div class="dep"><span class="min">40</);
 });
 
 test("the walk time is per mode", () => {
   // Same board: 3 min is unreachable by subway (12), 4 min is fine by bus (3).
-  assert.match(boardRow("A"), /class="lost">3</);
+  assert.match(boardRow("A"), /class="lost">03</);
   const cRow = boardRow("C99");
   assert.match(cRow, /<span class="lost"><\/span>/);
-  assert.match(cRow, /<div class="dep"><span class="min">4</);
+  assert.match(cRow, /<div class="dep"><span class="min">04</);
 });
 
 test("nothing catchable: the columns still render, dimmed", () => {
@@ -267,16 +268,16 @@ test("walk_minutes overrides the default per mode", () => {
   // Zero means "do not filter this mode": the subway row is back to raw order.
   const aRow = boardRow("A", { walk_minutes: { subway: 0 } });
   assert.match(aRow, /<span class="lost"><\/span>/);
-  assert.match(aRow, /<div class="dep"><span class="min">3</);
+  assert.match(aRow, /<div class="dep"><span class="min">03</);
   assert.match(aRow, /class="min">15</);
 });
 
 test("a single walk_minutes number applies to every mode", () => {
   const aRow = boardRow("A", { walk_minutes: 5 });
-  assert.match(aRow, /class="lost">3</);
-  assert.match(aRow, /<div class="dep"><span class="min">9</); // 9 > 5, catchable
+  assert.match(aRow, /class="lost">03</);
+  assert.match(aRow, /<div class="dep"><span class="min">09</); // 9 > 5, catchable
   const cRow = boardRow("C99", { walk_minutes: 5 });
-  assert.match(cRow, /class="lost">4</);
+  assert.match(cRow, /class="lost">04</);
   assert.match(cRow, /<div class="dep"><span class="min">12</);
 });
 
@@ -291,7 +292,7 @@ test("a mode the walk time does not mention is not filtered", () => {
   };
   const fRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "F");
   assert.match(fRow, /<span class="lost"><\/span>/);
-  assert.match(fRow, /<div class="dep"><span class="min">1</);
+  assert.match(fRow, /<div class="dep"><span class="min">01</);
 });
 
 test("a nonsense walk_minutes value does not break the render", () => {
@@ -318,7 +319,7 @@ test("renders three departure columns by default", () => {
   assert.match(aRow, /class="min">21</);
   assert.match(aRow, /class="min">27</);
   const cells = aRow.slice(aRow.indexOf('class="lead"'));
-  assert.ok(!/class="min">9</.test(cells), "the dropped departure must not be a column");
+  assert.ok(!/class="min">09</.test(cells), "the dropped departure must not be a column");
 });
 
 test("the departures option sets the column count", () => {
@@ -384,8 +385,8 @@ test("a flag reading 'now' takes the word's smaller size", () => {
   // "now" at the number size is 57px against the flag's 38px cell and clips.
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
   assert.match(css, /\.lead \.lost\.word\s*\{[^}]*font-size: 1\.4rem/);
-  // D44 leaves now, and something later on the line is catchable, so the flag
-  // is the word rather than a number.
+  // A departure leaving now, on a line where something later is catchable, is
+  // flagged as the word rather than a number.
   const board = {
     state: "x",
     attributes: {
@@ -400,7 +401,7 @@ test("a flag reading 'now' takes the word's smaller size", () => {
   const cRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "C99");
   assert.match(cRow, /<span class="lost word">now<\/span>/);
   // ...and a numeric flag is not the word.
-  assert.match(boardRow("A"), /<span class="lost">3<\/span>/);
+  assert.match(boardRow("A"), /<span class="lost">03<\/span>/);
 });
 
 test("the clock time sits beside the countdown, not under it", () => {
@@ -416,13 +417,39 @@ test("the clock time is set smaller than the countdown", () => {
   assert.match(css, /\.dep \.at\s*\{[^}]*font-size: 0\.8rem/);
 });
 
+test("every countdown is two digits", () => {
+  // A bare "8" beside a "12" leaves the columns ragged on the left. The
+  // one-hour horizon caps a value at 60, so two digits covers every value.
+  const board = {
+    state: "x",
+    attributes: {
+      lines: [
+        {
+          line: "C99", mode: "bus", stop: "s", direction: "d",
+          deps: [{ min: 8, at: "8:08am" }, { min: 48, at: "8:48am" }],
+        },
+      ],
+    },
+  };
+  const html = makeCard("sensor.dashboard_transit", board)._body.innerHTML;
+  assert.match(html, /class="min">08</);
+  assert.match(html, /class="min">48</);
+  assert.ok(!/class="min">8</.test(html), "a single-digit countdown must be padded");
+  // The flag is padded the same way, so it matches the columns it sits beside.
+  const flagged = row(
+    makeCard("sensor.dashboard_transit", board, { walk_minutes: 10 })._body.innerHTML,
+    "C99",
+  );
+  assert.match(flagged, /<span class="lost">08<\/span>/);
+});
+
 test("departure minutes carry no unit suffix", () => {
   const html = makeCard("sensor.dashboard_transit", BOARD)._body.innerHTML;
   assert.ok(!html.includes("min<"), "no 'min' suffix element");
   assert.ok(!/class="min">\d+min/.test(html), "no 'min' text in the minutes cell");
-  // Every row's minutes cell is a bare number (or "now").
+  // Every row's minutes cell is two digits, or "now", or the empty-line dash.
   for (const cell of html.matchAll(/class="min">([^<]*)</g)) {
-    assert.match(cell[1], /^(now|\d+|—)$/, `unexpected minutes cell ${cell[1]}`);
+    assert.match(cell[1], /^(now|—|\d{2})$/, `unexpected minutes cell ${cell[1]}`);
   }
 });
 
@@ -505,7 +532,7 @@ test("the card paints its rows into <ha-card>", () => {
   const painted = haCard(card).paintedText();
   assert.match(painted, /8:15am/);
   assert.match(painted, /C99/);
-  assert.match(painted, /class="lost">3</);
+  assert.match(painted, /class="lost">03</);
   assert.equal((painted.match(/class="row"/g) || []).length, 4);
 });
 

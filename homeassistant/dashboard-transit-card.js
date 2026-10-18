@@ -4,7 +4,9 @@
  * Renders the transistor MQTT board (sensor.dashboard_transit) as one row per
  * line: a route badge sized to be read across a room, then the next N
  * departures, each showing minutes away (no "min" suffix: it is the same on
- * every column, so it only ate width) with the clock time beside it.
+ * every column, so it only ate width) with the clock time beside it. Countdowns
+ * are always two digits — the one-hour horizon caps a value at 60, and a bare
+ * "8" beside a "12" leaves the columns ragged on the left.
  *
  * The stop name and direction are deliberately omitted; the board is one stop
  * and one direction per line, so both were identical on every row.
@@ -288,10 +290,13 @@ class DashboardTransitCard extends HTMLElement {
     return `<div class="row">${lead}${cells.join("")}</div>`;
   }
 
-  /** Countdown text for a departure: "now" under a minute, else the number. */
+  /** Countdown text for a departure: "now" under a minute, else two digits. */
   _minutesLabel(dep) {
     const min = Number(dep.min);
-    return min <= 0 ? "now" : String(min);
+    // Always two digits. A bare "8" beside a "12" leaves the columns ragged on
+    // the left, and the one-hour horizon caps a value at 60 — so two digits
+    // covers every value there can be.
+    return min <= 0 ? "now" : String(min).padStart(2, "0");
   }
 
   /**

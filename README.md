@@ -181,6 +181,10 @@ every 30 s.
 A markdown card cannot do this: HA strips every `style` attribute out of
 markdown content, so the presentation has to come from a custom element.
 
+Countdowns are **always two digits**: the one-hour horizon caps a value at 60,
+and a bare `8` beside a `12` left the columns ragged on the left. The flag and
+the columns share the width, so a padded `08` lines up with the rest.
+
 ### Walk time
 
 The card is not at the stop. Unless told otherwise it assumes **12 minutes to
