@@ -11,6 +11,14 @@ let
   watchesJson = builtins.toJSON (map (w: {
     inherit (w) line mode feed stopId stopName direction;
   }) cfg.watches);
+
+  # systemd expands %-specifiers in unit files, so a literal % must be doubled.
+  # This matters in practice: MTA feed URLs contain percent-encoding
+  # (…/nyct%2Fgtfs-nqrw), and an unescaped %2F makes systemd log
+  #   "Failed to resolve specifiers in TRANSISTOR_FEEDS=…, ignoring: Invalid slot"
+  # and then silently drop the whole Environment= line, so the service starts
+  # with no configuration at all.
+  escapeSpecifiers = value: lib.replaceStrings [ "%" ] [ "%%" ] (toString value);
 in
 {
   options.services.transistor = {
@@ -234,19 +242,19 @@ in
       wants = [ "network-online.target" ];
 
       environment = {
-        TRANSISTOR_MQTT_HOST = cfg.mqtt.host;
+        TRANSISTOR_MQTT_HOST = escapeSpecifiers cfg.mqtt.host;
         TRANSISTOR_MQTT_PORT = toString cfg.mqtt.port;
-        TRANSISTOR_MQTT_PREFIX = cfg.mqtt.prefix;
+        TRANSISTOR_MQTT_PREFIX = escapeSpecifiers cfg.mqtt.prefix;
         TRANSISTOR_MQTT_TLS = lib.boolToString cfg.mqtt.tls;
-        TRANSISTOR_TIMEZONE = cfg.timezone;
+        TRANSISTOR_TIMEZONE = escapeSpecifiers cfg.timezone;
         TRANSISTOR_PUBLISH_INTERVAL = toString cfg.publishInterval;
         TRANSISTOR_TOP_N = toString cfg.topN;
-        TRANSISTOR_FEEDS = feedsJson;
-        TRANSISTOR_WATCHES = watchesJson;
+        TRANSISTOR_FEEDS = escapeSpecifiers feedsJson;
+        TRANSISTOR_WATCHES = escapeSpecifiers watchesJson;
         # zoneinfo must come from tzdata; the sandbox has no /etc/localtime.
-        PYTHONTZPATH = "${pkgs.tzdata}/share/zoneinfo";
+        PYTHONTZPATH = escapeSpecifiers "${pkgs.tzdata}/share/zoneinfo";
       } // optionalAttrs (cfg.mqtt.username != null) {
-        TRANSISTOR_MQTT_USERNAME = cfg.mqtt.username;
+        TRANSISTOR_MQTT_USERNAME = escapeSpecifiers cfg.mqtt.username;
       };
 
       serviceConfig = {
