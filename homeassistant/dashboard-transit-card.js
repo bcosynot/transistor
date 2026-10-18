@@ -46,7 +46,7 @@ const STYLES = `
 ha-card {
   height: 100%;
   box-sizing: border-box;
-  padding: 10px 14px 12px;
+  padding: 10px 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -69,9 +69,13 @@ ha-card {
    * columns would resolve per row and the numbers would stop lining up down
    * the card. The departure column count comes from the card's departures
    * option, via the --dep-columns custom property. */
-  grid-template-columns: var(--lead-col, 78px) repeat(var(--dep-columns, 3), minmax(0, 1fr));
+  grid-template-columns: var(--lead-col, 94px) repeat(var(--dep-columns, 3), minmax(0, 1fr));
   align-items: center;
-  column-gap: 8px;
+  /* Tighter than the card's original 8px: the lead cell grew to hold the
+   * uncatchable departure at a readable size, and the columns are right-aligned
+   * numbers, so the gap between them can give the width up without the
+   * clusters moving any closer. */
+  column-gap: 6px;
 }
 /* The lead cell is a grid too, and the uncatchable cell is in it even when
  * empty: the badge sub-column is fixed and the flag starts right after it,
@@ -79,23 +83,32 @@ ha-card {
  * badge sub-column is sized for the widest pill ("Q100" at 1rem + padding). */
 .lead {
   display: grid;
-  grid-template-columns: 52px var(--lost-col, 22px);
+  grid-template-columns: 52px var(--lost-col, 38px);
   align-items: center;
   justify-content: start;
   column-gap: 4px;
   min-width: 0;
 }
-/* The departure you are about to lose: struck through, so the meaning does
- * not rest on the colour alone. */
+/* The departure you are about to lose. It is a number, not a label, so it runs
+ * one step under the countdowns (2.2rem against their 2.4rem) rather than down
+ * at the card's label size — but still struck through, so the meaning does not
+ * rest on the colour alone, and still in a fixed-width cell, so it cannot move
+ * with its value or shift the columns. */
 .lead .lost {
   text-align: left;
-  font-size: 0.95rem;
+  font-size: 2.2rem;
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--warning-color, #ffa726);
   text-decoration: line-through;
+  text-decoration-thickness: 2px;
 }
+/* A departure that is leaving as you look at it is flagged "now", and three
+ * letters do not ride at the number's size: measured, "now" at 2.2rem is 57px
+ * against the cell's 38px and would clip. The word takes a step down; the
+ * digits keep the number's size. */
+.lead .lost.word { font-size: 1.4rem; }
 .badge {
   justify-self: center;
   min-width: 40px; height: 40px;
@@ -118,8 +131,13 @@ ha-card {
 .dep .at { font-size: 0.8rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .dep.empty .min { opacity: 0.3; }
 /* Nothing on this line is catchable: the numbers are still the useful ones
- * (the next bus is still the next bus), so they stay — just stepped back. */
-.dep.unreachable .min, .dep.unreachable .at { opacity: 0.45; }
+ * (the next bus is still the next bus), so they stay — just stepped back. The
+ * clock times go: measured, "now" plus a 7-character time needs 110px against
+ * an 88px cell and would run into the neighbouring number, and in a state
+ * where none of them can be caught the exact clock time is the least useful
+ * thing on the row. */
+.dep.unreachable .min { opacity: 0.45; }
+.dep.unreachable .at { display: none; }
 .none { text-align: center; opacity: 0.6; font-size: 0.85rem; padding: 8px 0; }
 .state-stale .header .meta { color: var(--warning-color, #ffa726); opacity: 1; }
 `;
@@ -242,8 +260,11 @@ class DashboardTransitCard extends HTMLElement {
 
     // The uncatchable cell is always rendered, even empty — to the right of
     // the badge, and its own fixed-width cell, so the flags line up down the
-    // card whether or not a row has one.
-    const lostCell = `<span class="lost">${lost ? this._esc(this._minutesLabel(lost)) : ""}</span>`;
+    // card whether or not a row has one. A word ("now") needs a smaller size
+    // than a number to fit that cell; see the CSS.
+    const lostLabel = lost ? this._minutesLabel(lost) : "";
+    const lostCell =
+      `<span class="lost${lostLabel === "now" ? " word" : ""}">${this._esc(lostLabel)}</span>`;
     const lead = `<div class="lead">${badge}${lostCell}</div>`;
 
     const count = this._departures();

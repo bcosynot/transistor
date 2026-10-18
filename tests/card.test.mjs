@@ -338,7 +338,7 @@ test("the row grid's column count follows the departures option", () => {
   assert.equal(five.style.getPropertyValue("--dep-columns"), "5");
   assert.match(
     three.shadowRoot.childNodes[0].textContent,
-    /grid-template-columns: var\(--lead-col, 78px\) repeat\(var\(--dep-columns, 3\), minmax\(0, 1fr\)\)/,
+    /grid-template-columns: var\(--lead-col, 94px\) repeat\(var\(--dep-columns, 3\), minmax\(0, 1fr\)\)/,
   );
 });
 
@@ -364,14 +364,43 @@ test("the lead column is fixed and the departure columns equal", () => {
   assert.match(css, /\.row\s*\{[^}]*grid-template-columns: var\(--lead-col/);
 });
 
-test("the uncatchable departure reads as struck through, not just amber", () => {
+test("the uncatchable departure is a step under the countdown, and struck through", () => {
   // Colour alone is a weak signal for a colour-blind reader; the strike carries
-  // the meaning. Its cell is fixed-width too, so it cannot move with its value
-  // and the flags stay in one column down the card.
+  // the meaning. It is a number, not a label, so it sits one step under the
+  // countdowns rather than at the card's label size. Its cell is fixed-width
+  // too, so it cannot move with its value and the flags stay in one column.
   const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
-  assert.match(css, /\.lead\s*\{[^}]*grid-template-columns: 52px var\(--lost-col, 22px\)/);
+  assert.match(css, /\.lead\s*\{[^}]*grid-template-columns: 52px var\(--lost-col, 38px\)/);
+  assert.match(css, /\.lead \.lost\s*\{[^}]*font-size: 2\.2rem/);
   assert.match(css, /\.lead \.lost\s*\{[^}]*text-decoration: line-through/);
-  assert.match(css, /\.dep\.unreachable \.min[^{]*\{[^}]*opacity: 0\.45/);
+  assert.match(css, /\.dep \.min\s*\{[^}]*font-size: 2\.4rem/);
+  assert.match(css, /\.dep\.unreachable \.min\s*\{[^}]*opacity: 0\.45/);
+  // The clock time is dropped in that state: "now" beside a clock time does
+  // not fit the cell, and none of those departures is catchable anyway.
+  assert.match(css, /\.dep\.unreachable \.at\s*\{[^}]*display: none/);
+});
+
+test("a flag reading 'now' takes the word's smaller size", () => {
+  // "now" at the number size is 57px against the flag's 38px cell and clips.
+  const css = makeCard("sensor.dashboard_transit", BOARD).shadowRoot.childNodes[0].textContent;
+  assert.match(css, /\.lead \.lost\.word\s*\{[^}]*font-size: 1\.4rem/);
+  // D44 leaves now, and something later on the line is catchable, so the flag
+  // is the word rather than a number.
+  const board = {
+    state: "x",
+    attributes: {
+      lines: [
+        {
+          line: "C99", mode: "bus", stop: "s", direction: "d",
+          deps: [{ min: 0, at: "8:00am" }, { min: 40, at: "8:40am" }],
+        },
+      ],
+    },
+  };
+  const cRow = row(makeCard("sensor.dashboard_transit", board)._body.innerHTML, "C99");
+  assert.match(cRow, /<span class="lost word">now<\/span>/);
+  // ...and a numeric flag is not the word.
+  assert.match(boardRow("A"), /<span class="lost">3<\/span>/);
 });
 
 test("the clock time sits beside the countdown, not under it", () => {

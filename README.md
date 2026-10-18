@@ -193,7 +193,9 @@ departure closer than that as one you will watch leave:
   badge — outside the columns, so the three big numbers stay three big numbers.
 - When nothing at all is catchable (a bus every 2 min against a 3 min walk) the
   soonest departures render anyway at 45% opacity, so a row is never blank and
-  the flag position is left empty rather than repeating column one.
+  the flag position is left empty rather than repeating column one. Their clock
+  times are dropped in that state: a "now" plus a clock time does not fit the
+  cell, and none of those departures can be caught anyway.
 
 ```yaml
 - type: custom:dashboard-transit-card
